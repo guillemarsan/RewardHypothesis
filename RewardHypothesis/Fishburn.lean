@@ -43,6 +43,11 @@ def indiff_strict (r : Relation α) : Relation α :=
   fun x y => ¬ (x ≽[r] y) ∧ ¬ (y ≽[r] x)
 notation lhs " ∼ₛ[" r "]" rhs:50 => indiff_strict r lhs rhs
 
+lemma indiff_symm (r : Relation α) :
+  ∀ x y : α, (x ∼[r] y) → (y ∼[r] x) := by
+  intro x y h_xy
+  exact ⟨h_xy.right, h_xy.left⟩
+
 /-
 Define the axioms for ordinal representation on a preference relation.
 -/
@@ -55,6 +60,54 @@ def transitivity (r : Relation α) : Prop :=
 def ordinal (r : Relation α) : Prop :=
   completeness r ∧
   transitivity r
+
+lemma indiff_transitivity (r : Relation α) :
+  transitivity r → ∀ x y z : α, (x ∼[r] y ∧ y ∼[r] z) → (x ∼[r] z) := by
+  intro h_trans x y z h_xyz
+  rcases h_xyz with ⟨h_xy, h_yz⟩
+  exact ⟨h_trans x y z ⟨h_xy.left, h_yz.left⟩, h_trans z y x ⟨h_yz.right, h_xy.right⟩⟩
+
+lemma highest_element (r : Relation α) :
+  ordinal r → ∀ x y z : α, ∃ w : α, w ≽[r] x ∧ w ≽[r] y ∧ w ≽[r] z := by
+  intro h_ordinal
+  rcases h_ordinal with ⟨h_complete, h_trans⟩
+  intro x y z
+  have hxy := h_complete x y
+  have hxz := h_complete x z
+  have hyz := h_complete y z
+  have h_largest: (x ≽[r] y ∧ x ≽[r] z) ∨
+    (y ≽[r] x ∧ y ≽[r] z) ∨ (z ≽[r] x ∧ z ≽[r] y) := by
+    cases hxy <;> cases hxz <;> cases hyz <;> aesop
+  cases h_largest with
+    | inl h_x_l =>
+        exact ⟨x, ⟨(h_complete x x).elim id id, h_x_l⟩⟩
+    | inr h_inr =>
+      cases h_inr with
+      | inl h_y_l =>
+        exact ⟨y, ⟨h_y_l.left, (h_complete y y).elim id id, h_y_l.right⟩⟩
+      | inr h_z_l =>
+        exact ⟨z, ⟨h_z_l.left, h_z_l.right, (h_complete z z).elim id id⟩⟩
+
+lemma lowest_element (r : Relation α) :
+  ordinal r → ∀ x y z : α, ∃ w : α, x ≽[r] w ∧ y ≽[r] w ∧ z ≽[r] w := by
+  intro h_ordinal
+  rcases h_ordinal with ⟨h_complete, h_trans⟩
+  intro x y z
+  have hxy := h_complete x y
+  have hxz := h_complete x z
+  have hyz := h_complete y z
+  have h_smallest: (y ≽[r] x ∧ z ≽[r] x) ∨
+    (x ≽[r] y ∧ z ≽[r] y) ∨ (x ≽[r] z ∧ y ≽[r] z) := by
+    cases hxy <;> cases hxz <;> cases hyz <;> aesop
+  cases h_smallest with
+    | inl h_x_s =>
+        exact ⟨x, ⟨(h_complete x x).elim id id, h_x_s⟩⟩
+    | inr h_inr =>
+      cases h_inr with
+      | inl h_y_s =>
+        exact ⟨y, ⟨h_y_s.left, (h_complete y y).elim id id, h_y_s.right⟩⟩
+      | inr h_z_s =>
+        exact ⟨z, ⟨h_z_s.left, h_z_s.right, (h_complete z z).elim id id⟩⟩
 
 
 /-
