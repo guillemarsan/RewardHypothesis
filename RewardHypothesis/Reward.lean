@@ -1,10 +1,24 @@
+/-
+Copyright (c) 2026 Guillermo Martín-Sanchez . All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Guillermo Martín-Sánchez
+-/
+
+
 import RewardHypothesis.vNM
 
-
+/-
+Define a concatenable mixture space and the γ-indifference axiom.
+Then, state and prove Markov reward theorem: vNM axioms and γ-indifference
+are equivalent to the existence of a markov reward function.
+-/
 namespace Reward
 open OrdinalRep
 open Utility
 
+/-
+Lemma for the γ-indifference axiom
+-/
 
 lemma indiff_in_Icc (hg : g ∈ Set.Icc (0 : ℝ) 1) : 1/(g+1) ∈ Set.Icc (0 : ℝ) 1 :=
   by
@@ -36,6 +50,18 @@ class ConcatMixSpace (α : Type) extends MixSpace α where
     ∀ (t : UniType T), concat t ε = t.1
 
 notation lhs "⊕" rhs:50 => ConcatMixSpace.concat lhs rhs
+
+/-
+Define what it means for a function to be a reward function.
+-/
+
+def markov_recursive [inst : ConcatMixSpace α] (u : α → ℝ) : Prop :=
+  ∃ γ : UniType inst.T → IntervalType, ∀ x : α, ∀ t : UniType inst.T,
+  (u (t ⊕ x) = u t.1 + (γ t).1 * u x) ∧ (u (inst.ε)) = 0
+
+def reward_function [ConcatMixSpace α] (u : α → ℝ) (r : Relation α) : Prop :=
+  ordinal_consistent u r ∧ p_linear u ∧ markov_recursive u
+
 
 /-
 Define the axiom for markov reward on a preference relation.
@@ -228,23 +254,11 @@ u (t ⊕ x) = u t.1 + F (t,x) * u x ∧ F (t,x) ≥ 0 := by
   exact ⟨u, ⟨h_ordinal_consistent, h_p_linear⟩, F, h_F_prop⟩
 
 
-
-/-
-Define what it means for a function to be a reward function.
--/
-
-def markov_recursive [inst : ConcatMixSpace α] (u : α → ℝ) : Prop :=
-  ∃ γ : UniType inst.T → IntervalType, ∀ x : α, ∀ t : UniType inst.T,
-  (u (t ⊕ x) = u t.1 + (γ t).1 * u x) ∧ (u (inst.ε)) = 0
-
-def reward_function [ConcatMixSpace α] (u : α → ℝ) (r : Relation α) : Prop :=
-  ordinal_consistent u r ∧ p_linear u ∧ markov_recursive u
-
-
 /-
 Markov reward Theorem: A preference relation on a concatenable mixture space
 satisfies completeness, transitivity, independence, continuity and γ-indifference,
 ↔ there exists a reward function u : α → ℝ that represents the preference relation.
+Proof from Bowling et al. (2023) "Settling the Reward Hypothesis"
 -/
 
 theorem Markov_Reward_theorem [inst : ConcatMixSpace α] (r : Relation α) :

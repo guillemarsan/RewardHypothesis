@@ -1,9 +1,25 @@
+/-
+Copyright (c) 2026 Guillermo Martín-Sanchez . All rights reserved.
+Released under Apache 2.0 license as described in the file LICENSE.
+Authors: Guillermo Martín-Sánchez
+-/
+
+
 import RewardHypothesis.Fishburn
 
 set_option linter.style.emptyLine false
 
+/-
+Define a mixture space and the vNM axioms.
+Then, state and prove vNM theorem: vNM axioms are equivalent to
+the existence of a utility function.
+-/
 namespace Utility
 open OrdinalRep
+
+/-
+Lemmas for the mixture space
+-/
 
 lemma comm_in_Icc (hp : p ∈ Set.Icc (0 : ℝ) 1) :
   1 - p ∈ Set.Icc (0 : ℝ) 1 :=
@@ -68,6 +84,10 @@ class MixSpace (α : Type) where
 
 
 notation lhs " +[" p "]" rhs:50 => MixSpace.mix p lhs rhs
+
+/-
+Derived properties of the mixture operation
+-/
 
 lemma mix_zero [MixSpace α] (p : IntervalType) (x y : α) (h : p.1 = 0) :
   (x +[p] y) = y := by
@@ -259,26 +279,6 @@ lemma associativity_of_mixtures [MixSpace α] :
           apply Subtype.ext h_final_eq
         rw [h_final_eq_subtype]
 
-
-
-/-
-Define the axioms for expected utility on a preference relation.
--/
-
-def independence [MixSpace α] (r : Relation α) : Prop :=
-  ∀ (x y z: α) (p : IntervalType), p.1 ∈ Set.Ioc 0 1 →
-  ((x ≽[r] y) ↔ (x +[p] z) ≽[r] (y +[p] z))
-
-def continuity [MixSpace α] (r : Relation α) : Prop :=
-  ∀ x y z : α, (x ≽[r] y ∧ y ≽[r] z) → ∃ p : IntervalType, (x +[p] z) ∼[r] y
-
-
-def vNM_axioms [MixSpace α] (r : Relation α) : Prop :=
-  completeness r ∧
-  transitivity r ∧
-  independence r ∧
-  continuity r
-
 /-
 Define what it means for a function to be an expected utility function.
 -/
@@ -291,7 +291,24 @@ def utility_function [MixSpace α] (u : α → ℝ) (r : Relation α) : Prop :=
 
 
 /-
-Some lemmas
+Define the vNM axioms for expected utility on a preference relation.
+-/
+
+def independence [MixSpace α] (r : Relation α) : Prop :=
+  ∀ (x y z: α) (p : IntervalType), p.1 ∈ Set.Ioc 0 1 →
+  ((x ≽[r] y) ↔ (x +[p] z) ≽[r] (y +[p] z))
+
+def continuity [MixSpace α] (r : Relation α) : Prop :=
+  ∀ x y z : α, (x ≽[r] y ∧ y ≽[r] z) → ∃ p : IntervalType, (x +[p] z) ∼[r] y
+
+def vNM_axioms [MixSpace α] (r : Relation α) : Prop :=
+  completeness r ∧
+  transitivity r ∧
+  independence r ∧
+  continuity r
+
+/-
+Lemmas for the proof of the vNM theorem
 -/
 
 lemma full_indep_if_indep_and_comp [MixSpace α] (r : Relation α) :
@@ -443,8 +460,6 @@ lemma strict_interior [MixSpace α] (r : Relation α) :
     exact absurd h_x_ge_y hxy.right
   exact ⟨⟨h_partial_interior.left, h_not_partial_interior_x⟩,
      ⟨h_partial_interior.right, h_not_partial_interior_y⟩⟩
-
-
 
 
 lemma strict_p_consistency [MixSpace α] (r : Relation α) :
@@ -845,7 +860,6 @@ lemma linear_substitution [MixSpace α] (r : Relation α) :
 Structures needed for the proof of the vNM theorem.
 -/
 
--- Define then the set S(a, b) = { x | a ≽ x ≽ b }
 def S (r : Relation α) (a b : α) [MixSpace α] : Set α :=
   { x : α | a ≽[r] x ∧ x ≽[r] b }
 
@@ -874,7 +888,9 @@ structure u_Type (r : Relation α) (x m n : α) [MixSpace α] where
 /-
 vNM Theorem: A preference relation on a mixture space satisfies
 completeness, transitivity, independence, and continuity,
-↔ there exists a utility function u : α → ℝ that represents the preference relation.
+↔ there exists a utility function u : α → ℝ.
+Adapted from Herstein and Milnor (1953) "An Axiomatic Approach to
+Measurable Utility" Theorem 8.
 -/
 
 theorem vNM_theorem [MixSpace α] (r : Relation α) :
@@ -2110,8 +2126,9 @@ theorem utility_unique [MixSpace α] (r : Relation α) {u1 u2 : α → ℝ}
 
 
 /-
-Corollary: Given a utility function, we can construct infinitely many
-other utility functions that give any desired value to a particular element.
+Corollary: Given a utility function, we can construct
+another utility function that gives any desired value
+to a particular element.
 -/
 
 lemma utility_offset [MixSpace α] (r : Relation α)

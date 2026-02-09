@@ -1,5 +1,5 @@
 /-
-Copyright (c) 2025 Guillermo Martín-Sanchez . All rights reserved.
+Copyright (c) 2026 Guillermo Martín-Sanchez . All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Guillermo Martín-Sánchez
 -/
@@ -17,19 +17,24 @@ import Mathlib.Topology.Instances.Real.Lemmas
 import Mathlib.Topology.MetricSpace.Basic
 import Mathlib.Topology.MetricSpace.ProperSpace.Real
 
-
+/-
+Define a preference relation on a set and the axioms for ordinal representation.
+Then, state and prove ordinal theorem: ordinal representation and
+order separability on the quotient are equivalent to the existence of
+a ordinal consistent function.
+-/
 namespace OrdinalRep
 
 
 /-
-Define a preference measure on the space.
+Define a preference measure on the set.
 -/
 def Relation (α : Type*) := α → α → Prop
 notation lhs " ≽[" r "]" rhs:50 => r lhs rhs
 
 
 /-
-Useful definitions
+Useful definitions relating to ≽
 -/
 def strict (r : Relation α) : Relation α :=
   fun x y => (x ≽[r] y) ∧ ¬(y ≽[r] x)
@@ -49,6 +54,17 @@ lemma indiff_symm (r : Relation α) :
   exact ⟨h_xy.right, h_xy.left⟩
 
 /-
+Define what it means for a function to represent the preference relation.
+-/
+
+def ordinal_consistent (u : α → ℝ) (r : Relation α) : Prop :=
+  ∀ x y : α, (x ≽[r] y) ↔ (u x ≥ u y)
+
+def ordinal_consistent_strict (u : α → ℝ) (rs : Relation α) : Prop :=
+  ∀ x y : α, (x ≽[rs] y) ↔ (u x > u y)
+
+
+/-
 Define the axioms for ordinal representation on a preference relation.
 -/
 def completeness (r : Relation α) : Prop :=
@@ -60,6 +76,10 @@ def transitivity (r : Relation α) : Prop :=
 def ordinal (r : Relation α) : Prop :=
   completeness r ∧
   transitivity r
+
+/-
+Useful lemmas from these axioms
+-/
 
 lemma indiff_transitivity (r : Relation α) :
   transitivity r → ∀ x y z : α, (x ∼[r] y ∧ y ∼[r] z) → (x ∼[r] z) := by
@@ -109,16 +129,39 @@ lemma lowest_element (r : Relation α) :
       | inr h_z_s =>
         exact ⟨z, ⟨h_z_s.left, h_z_s.right, (h_complete z z).elim id id⟩⟩
 
+lemma indiff_eq_indiff_strict {r : Relation α} :
+  ordinal r → ∀ x y : α, (x ∼[r] y) ↔ (x ∼ₛ[strict r] y) := by
+  intro h_ordinal x y
+  apply Iff.intro
+  · -- Forward direction: x ∼[r] y → x ∼ₛ[strict r] y
+    intro h_xy
+    rcases h_xy with ⟨h_xy1, h_xy2⟩
+    constructor
+    · -- ¬(x ≽[strict r] y)
+      intro h_xgy
+      rcases h_xgy with ⟨h_xgy1, h_xgy2⟩
+      exact h_xgy2 h_xy2
+    · -- ¬(y ≽[strict r] x)
+      intro h_ygx
+      rcases h_ygx with ⟨h_ygx1, h_ygx2⟩
+      exact h_ygx2 h_xy1
+  · -- Backward direction: x ∼ₛ[strict r] y → x ∼[r] y
+    intro h_xy
+    rcases h_xy with ⟨h_nxgy, h_nygx⟩
+    have h_yx_exp := not_and_or.mp h_nygx
+    have h_xgy_exp := not_and_or.mp h_nxgy
+    constructor
+    · -- x ≽[r] y
+        by_contra h_not
+        have h_yx := Or.resolve_left (h_ordinal.left x y) h_not
+        have h_xy := not_not.mp (Or.resolve_left h_yx_exp (not_not.mpr h_yx))
+        exact (h_not h_xy).elim
+    · -- y ≽[r] x
+      by_contra h_not
+      have h_xy := Or.resolve_right (h_ordinal.left x y) h_not
+      have h_yx := not_not.mp (Or.resolve_left h_xgy_exp (not_not.mpr h_xy))
+      exact (h_not h_yx).elim
 
-/-
-Define what it means for a function to represent the preference relation.
--/
-
-def ordinal_consistent (u : α → ℝ) (r : Relation α) : Prop :=
-  ∀ x y : α, (x ≽[r] y) ↔ (u x ≥ u y)
-
-def ordinal_consistent_strict (u : α → ℝ) (rs : Relation α) : Prop :=
-  ∀ x y : α, (x ≽[rs] y) ↔ (u x > u y)
 
 /-
 Axioms for the associated strict preference relation
@@ -180,40 +223,8 @@ def order_separable (rs : Relation α) : Prop :=
   ∃ D : Set α, Countable D ∧ order_dense D rs
 
 /-
-If the relation is ordinal, then indifference and strict indifference are the same.
+Lemmas for the proof of Fishburn's theorem
 -/
-theorem indiff_eq_indiff_strict {r : Relation α} (h_ordinal : ordinal r) :
-  ∀ x y : α, (x ∼[r] y) ↔ (x ∼ₛ[strict r] y) := by
-  intro x y
-  apply Iff.intro
-  · -- Forward direction: x ∼[r] y → x ∼ₛ[strict r] y
-    intro h_xy
-    rcases h_xy with ⟨h_xy1, h_xy2⟩
-    constructor
-    · -- ¬(x ≽[strict r] y)
-      intro h_xgy
-      rcases h_xgy with ⟨h_xgy1, h_xgy2⟩
-      exact h_xgy2 h_xy2
-    · -- ¬(y ≽[strict r] x)
-      intro h_ygx
-      rcases h_ygx with ⟨h_ygx1, h_ygx2⟩
-      exact h_ygx2 h_xy1
-  · -- Backward direction: x ∼ₛ[strict r] y → x ∼[r] y
-    intro h_xy
-    rcases h_xy with ⟨h_nxgy, h_nygx⟩
-    have h_yx_exp := not_and_or.mp h_nygx
-    have h_xgy_exp := not_and_or.mp h_nxgy
-    constructor
-    · -- x ≽[r] y
-        by_contra h_not
-        have h_yx := Or.resolve_left (h_ordinal.left x y) h_not
-        have h_xy := not_not.mp (Or.resolve_left h_yx_exp (not_not.mpr h_yx))
-        exact (h_not h_xy).elim
-    · -- y ≽[r] x
-      by_contra h_not
-      have h_xy := Or.resolve_right (h_ordinal.left x y) h_not
-      have h_yx := not_not.mp (Or.resolve_left h_xgy_exp (not_not.mpr h_xy))
-      exact (h_not h_yx).elim
 
 lemma interval_endpoint_inside_of_intersection
   {a l₁ u₁ l₂ u₂ : ℝ}
@@ -261,6 +272,7 @@ by
 Statment of Fishburn Theorem: A preference relation on a set satisfies
 being a weak order and order separability on the quotient induced, if and only if
 there exists a function f : Set → ℝ that strictly represents the preference relation.
+Proof from: Fishburn (1970) "Utility Theory for Decision Making" Theorem 3.1.
 -/
 theorem Fishburn_theorem (rs : Relation α) :
   (∃ h : weak_order rs, order_separable (IndiffQuotRel rs h))
@@ -790,9 +802,9 @@ theorem Fishburn_theorem (rs : Relation α) :
     exact ⟨h_weak_order, h_order_separable⟩
 
 /-
-If the relation is ordinal, then the associated strict relation is a weak order.
+Lemmas for the ordinal theorem
 -/
-theorem weak_if_ordinal {r : Relation α} :
+lemma weak_if_ordinal {r : Relation α} :
   ordinal r → weak_order (strict r) := by
   intro h_ordinal
   -- Show that rs is a weak order from r being ordinal
@@ -823,10 +835,7 @@ theorem weak_if_ordinal {r : Relation α} :
       exact h_xz.right (h_trans z y x ⟨h_zy, h_yx⟩)
   exact h_weak_order
 
-/-
-If the relation is complete, then previous results can be strengthened to an equivalence.
--/
-theorem c_weak_iff_ordinal {r : Relation α} :
+lemma c_weak_iff_ordinal {r : Relation α} :
   completeness r → (ordinal r ↔ weak_order (strict r)) := by
   intro h_compl
   apply Iff.intro
@@ -858,10 +867,8 @@ theorem c_weak_iff_ordinal {r : Relation α} :
         | inr h_xz => exact h_xz
       | inr h_nnxz => exact not_not.mp h_nnxz
 
-/-
-If f is ordinal consistent with r, then it is strictly ordinal consistent with strict r.
--/
-theorem strict_ordinal_consistent_if_consistent {r : Relation α} {f : α → ℝ} :
+
+lemma strict_ordinal_consistent_if_consistent {r : Relation α} {f : α → ℝ} :
   ordinal_consistent f r → ordinal_consistent_strict f (strict r) := by
   intro h_ord_consistency x y
   apply Iff.intro
@@ -881,11 +888,7 @@ theorem strict_ordinal_consistent_if_consistent {r : Relation α} {f : α → �
     have h_xy : x ≽[r] y := (h_ord_consistency x y).mpr (le_of_lt h_fx_g_fy)
     exact ⟨h_xy, h_nyx⟩
 
-/-
-If r is complete, then f is ordinal consistent with r if and only if it is strictly
-ordinal consistent with strict r.
--/
-theorem c_strict_ordinal_consistent_iff_consistent {r : Relation α} {f : α → ℝ} :
+lemma c_strict_ordinal_consistent_iff_consistent {r : Relation α} {f : α → ℝ} :
   completeness r → (ordinal_consistent f r ↔ ordinal_consistent_strict f (strict r)) := by
   intro h_compl
   apply Iff.intro
@@ -921,7 +924,7 @@ theorem c_strict_ordinal_consistent_iff_consistent {r : Relation α} {f : α →
 /-
 Main Ordinal Theorem: A preference relation on a set satisfies
 completeness and transitivity, and its order separable on the quotient induced
-if and only if there exists a function f : Set → ℝ that represents the preference relation.
+if and only if there exists a ordinal consistent function f : Set → ℝ.
 -/
 theorem ordinal_theorem (r : Relation α) :
   (∃ h : ordinal r, order_separable (IndiffQuotRel (strict r) (weak_if_ordinal h)))
