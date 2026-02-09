@@ -50,10 +50,10 @@ def γ_indifference [inst : ConcatMixSpace α] (r : Relation α) : Prop :=
     ((t ⊕ x)+[pγ]y) ∼[r] ((t ⊕ y)+[pγ]x)
 
 /-
-Completeness, transitivity, independence and continuity → (γ-indifference → dynamic consistency)
+vNM → (γ-indifference → dynamic consistency)
 -/
 
-theorem dc_if_γ_indiff [inst : ConcatMixSpace α] (r : Relation α) :
+theorem dc_if_γ_indiff [ConcatMixSpace α] (r : Relation α) :
   vNM_axioms r → (γ_indifference r → dynamic_consistency r):= by
   intro h_vNM h_γ_indiff
   rcases h_γ_indiff with ⟨γ, h_γ_indiff⟩
@@ -121,6 +121,112 @@ theorem dc_if_γ_indiff [inst : ConcatMixSpace α] (r : Relation α) :
   have h_tx_ty : (t ⊕ x) ≽[r] (t ⊕ y) := by
     exact (h_ordinal_consistent (t⊕x) (t⊕y)).mpr h_u_txy_geq_final
   exact h_tx_ty
+
+/-
+vNM ∧ dynamic consistency → u(t⊕x) = u(t) + F(t,x)u(x) with F(t,x) ≥ 0
+-/
+theorem recursive_if_dc [inst : ConcatMixSpace α] (r : Relation α) :
+vNM_axioms r ∧ dynamic_consistency r → ∃ u : α → ℝ, utility_function u r ∧
+∃ F: (UniType inst.T) × α → ℝ, ∀ (x : α) (t : UniType inst.T),
+u (t ⊕ x) = u t.1 + F (t,x) * u x ∧ F (t,x) ≥ 0 := by
+  intro h_r_char
+  rcases h_r_char with ⟨h_vNM, h_dc⟩
+  -- Existence of utility function from vNM theorem
+  have h_u_exists := (vNM_theorem r).mp h_vNM
+  -- Set u(ε) = 0
+  have h_u_offset := utility_offset r h_u_exists 0 inst.ε
+  rcases h_u_offset with ⟨u, h_utility_function, h_u_ε_0⟩
+  rcases h_utility_function with ⟨h_ordinal_consistent, h_p_linear⟩
+  -- Lets define F = (u(t ⊕ x) - u t.1) / u x if u x ≠ 0, and 0 otherwise
+  let F : (UniType inst.T) × α → ℝ :=
+    fun tx =>
+    let t := tx.1
+    let x := tx.2
+    if u x = 0 then 0 else (u (t ⊕ x) - u t.1) / u x
+  have h_F_prop : ∀ (x : α) (t : UniType inst.T),
+    u (t ⊕ x) = u t.1 + F (t,x) * u x ∧ F (t,x) ≥ 0 := by
+    intro x t
+    by_cases h_ux_zero : u x = 0
+    · -- If u x = 0, u x = u ε
+      have h_ux_ε : u x = u inst.ε := by
+        rw [←h_u_ε_0] at h_ux_zero
+        exact h_ux_zero
+      -- So x ≽ ε and ε ≽ x
+      have h_x_ε : x ≽[r] inst.ε := by
+        exact (h_ordinal_consistent x inst.ε).mpr (le_of_eq h_ux_ε.symm)
+      have h_ε_x : inst.ε ≽[r] x := by
+        exact (h_ordinal_consistent inst.ε x).mpr (le_of_eq h_ux_ε)
+      -- So by DC consistency, t ⊕ x ≽ t ⊕ ε and t ⊕ ε ≽ t ⊕ x
+      have h_tx_ε : (t ⊕ x) ≽[r] (t ⊕ inst.ε):= by
+        exact h_dc x inst.ε t h_x_ε
+      have h_ε_tx : (t ⊕ inst.ε) ≽[r] (t ⊕ x) := by
+        exact h_dc inst.ε x t h_ε_x
+      -- So u(t ⊕ x) = u(t ⊕ ε) = u t.1
+      have h_u_tx : u (t ⊕ x) = u (t ⊕ inst.ε) := by
+        have h_geq := (h_ordinal_consistent (t⊕x) (t⊕inst.ε)).mp h_tx_ε
+        have h_leq := (h_ordinal_consistent (t⊕inst.ε) (t⊕x)).mp h_ε_tx
+        exact le_antisymm h_leq h_geq
+      have h_u_tx_reduced : u (t ⊕ x) = u t.1 := by
+        rw [inst.concat_idempotent t] at h_u_tx
+        exact h_u_tx
+      -- So we have to prove u t.1 = u t.1 + F (t,x) * u x and F (t,x) ≥ 0
+      -- which is true for any value F (t,x) ≥ 0, in particular F (t,x) = 0
+      rw [h_u_tx_reduced]
+      simp only [F, h_ux_zero, if_true, mul_zero, add_zero]
+      exact ⟨trivial, le_rfl⟩
+    · -- If u x ≠ 0, we can rearrange the definition of F
+      have h_F_def : F (t,x) = (u (t ⊕ x) - u t.1) / u x := by
+        simp only [F, h_ux_zero, if_false]
+      have h_u_prop : u (t ⊕ x) = u t.1 + F (t,x) * u x := by
+        rw [h_F_def]
+        field_simp [h_ux_zero]
+        linarith
+      -- We also need to show F (t,x) ≥ 0
+      by_cases h_x_ε : u x > 0
+      · -- If u x ≥ 0 then x ≽ ε and
+        -- u(x) ≥ 0 and u(t ⊕ x) - u(t) ≥ 0 by DC consistency
+        have h_ux_ge_uε : u x ≥ u inst.ε := by
+          rw [←h_u_ε_0] at h_x_ε
+          exact le_of_lt h_x_ε
+        have h_x_ε : x ≽[r] inst.ε := by
+          exact (h_ordinal_consistent x inst.ε).mpr h_ux_ge_uε
+        have h_tx_ε : (t ⊕ x) ≽[r] (t ⊕ inst.ε) := by
+          exact h_dc x inst.ε t h_x_ε
+        have h_u_tx_geq : u (t ⊕ x) ≥ u (t ⊕ inst.ε) := by
+          exact (h_ordinal_consistent (t⊕x) (t⊕inst.ε)).mp h_tx_ε
+        have h_u_tx_geq_reduced : u (t ⊕ x) ≥ u t.1 := by
+          rw [inst.concat_idempotent t] at h_u_tx_geq
+          exact h_u_tx_geq
+        have h_F_geq : F (t,x) ≥ 0 := by
+          rw [h_F_def]
+          field_simp [h_ux_zero]
+          linarith
+        exact ⟨h_u_prop, h_F_geq⟩
+      · -- If ¬ u(x) = 0 and ¬ u(x) > 0, then u(x) < 0
+        have h_ux_le_z: u x ≤ 0 := by
+          linarith
+        have h_ux_le_uε : u x ≤ u inst.ε := by
+          linarith
+        -- So ε ≽ x and u(t ⊕ x) - u(t) ≤ 0 by DC consistency
+        have h_ε_x : inst.ε ≽[r] x := by
+          exact (h_ordinal_consistent inst.ε x).mpr h_ux_le_uε
+        have h_ε_tx : (t ⊕ inst.ε) ≽[r] (t ⊕ x) := by
+          exact h_dc inst.ε x t h_ε_x
+        have h_u_tx_leq : u (t ⊕ x) ≤ u (t ⊕ inst.ε) := by
+          exact (h_ordinal_consistent (t⊕inst.ε) (t⊕x)).mp h_ε_tx
+        have h_u_tx_leq_reduced : u (t ⊕ x) ≤ u t.1 := by
+          rw [inst.concat_idempotent t] at h_u_tx_leq
+          exact h_u_tx_leq
+        have h_F_geq : F (t,x) ≥ 0 := by
+          rw [h_F_def]
+          field_simp [h_ux_zero]
+          have h_numer_leq : u (t ⊕ x) - u t.1 ≤ 0 := by
+            linarith
+          exact div_nonneg_of_nonpos h_numer_leq h_ux_le_z
+        exact ⟨h_u_prop, h_F_geq⟩
+  -- So we have u and F with the desired properties
+  exact ⟨u, ⟨h_ordinal_consistent, h_p_linear⟩, F, h_F_prop⟩
+
 
 
 /-
