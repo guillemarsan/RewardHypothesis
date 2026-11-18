@@ -16,6 +16,7 @@ import Mathlib.Topology.Defs.Basic
 import Mathlib.Topology.Instances.Real.Lemmas
 import Mathlib.Topology.MetricSpace.Basic
 import Mathlib.Topology.MetricSpace.ProperSpace.Real
+import Mathlib.Analysis.SpecificLimits.Basic
 
 /-
 Define a preference relation on a set and the axioms for ordinal representation.
@@ -226,6 +227,42 @@ def order_separable (rs : Relation α) : Prop :=
 Lemmas for the proof of Fishburn's theorem
 -/
 
+-- Two distinct elements of the quotient are strictly comparable
+lemma indiff_quot_rel_total {rs : Relation α} (h : weak_order rs) :
+    ∀ p q : IndiffQuot rs, p ≠ q →
+    (p ≽[IndiffQuotRel rs h] q) ∨ (q ≽[IndiffQuotRel rs h] p) := by
+  intro p q
+  refine Quot.induction_on₂ p q ?_
+  intro x y hxy
+  by_contra hn
+  rcases not_or.mp hn with ⟨hnxy, hnyx⟩
+  exact hxy (Quot.sound ⟨hnxy, hnyx⟩)
+
+-- The strict order on the quotient is transitive
+lemma indiff_quot_rel_trans {rs : Relation α} (h : weak_order rs) :
+    ∀ p q r : IndiffQuot rs, p ≽[IndiffQuotRel rs h] q → q ≽[IndiffQuotRel rs h] r →
+    p ≽[IndiffQuotRel rs h] r := by
+  intro p q r
+  refine Quot.induction_on₃ p q r ?_
+  intro x y z hxy hyz
+  by_contra hnxz
+  exact h.right y x z ⟨h.left x y hxy, hnxz⟩ hyz
+
+-- The relation on the quotient is again a weak order
+lemma indiff_quot_rel_weak_order {rs : Relation α} (h : weak_order rs) :
+    weak_order (IndiffQuotRel rs h) := by
+  constructor
+  · -- Asymmetry
+    intro p q
+    refine Quot.induction_on₂ p q ?_
+    intro x y hxy
+    exact h.left x y hxy
+  · -- Negative transitivity
+    intro p q r
+    refine Quot.induction_on₃ p q r ?_
+    intro x y z hn
+    exact h.right x y z hn
+
 lemma interval_endpoint_inside_of_intersection
   {a l₁ u₁ l₂ u₂ : ℝ}
   (h₁ : l₁ < a ∧ a < u₁)
@@ -269,6 +306,95 @@ by
         exact ⟨h, h_overlap₁⟩
 
 /-
+Countable representation theorem: if a preference relation is a weak order and the
+quotient by indifference is countable, then there exists a function f : Set → ℝ that
+strictly represents the preference relation.
+Used in the main Fishburn theorem as a key step to construct the representing function.
+Statement from: Fishburn (1970) "Utility Theory for Decision Making" Theorem 2.2,
+Proof: Non-inductive construction of Voorneveld & Weibull,
+"An Elementary Proof That Well-Behaved Utility Functions Exist", pre Theorem 1, which is more
+natural in Lean than Fishburn's: the utility of a class is the total weight of the classes below it.
+-/
+theorem countable_representation_theorem (rs : Relation α) :
+    weak_order rs → Countable (IndiffQuot rs) →
+    ∃ f : α → ℝ, ordinal_consistent_strict f rs := by
+  intro h_weak_order h_countable
+  -- Enumerate the quotient: each indifference class gets a distinct natural number
+  have h_enum : ∃ n : IndiffQuot rs → ℕ, Function.Injective n :=
+    Countable.exists_injective_nat (IndiffQuot rs)
+  rcases h_enum with ⟨n, hn⟩
+  -- Weight of each class: w y = (1/2)^(n y)
+  let w : IndiffQuot rs → ℝ := fun y ↦ (1 / 2 : ℝ) ^ n y
+  -- Every weight is positive
+  have hw_pos : ∀ y : IndiffQuot rs, 0 < w y := by
+    intro y
+    exact pow_pos (by norm_num) (n y)
+  -- The weights are summable, since n is injective
+  have hw_sum : Summable w := summable_geometric_two.comp_injective hn
+  -- Utility of a class q: the total weight of the classes strictly below q
+  -- u q = ∑ w y over all y strictly below q
+  let uq : IndiffQuot rs → ℝ := fun q ↦
+    ∑' y : IndiffQuot rs, Set.indicator {y | q ≽[IndiffQuotRel rs h_weak_order] y} w y
+  -- If p ≻ q then uq p > uq q: p has everything below q, plus q itself
+  have huq_gt : ∀ p q : IndiffQuot rs,
+      p ≽[IndiffQuotRel rs h_weak_order] q → uq p > uq q := by
+    intro p q hpq
+    -- Everything below q is below p, by transitivity
+    have hsub : ∀ y : IndiffQuot rs, y ∈ {y | q ≽[IndiffQuotRel rs h_weak_order] y} →
+        y ∈ {y | p ≽[IndiffQuotRel rs h_weak_order] y} :=
+      fun y hqy ↦ indiff_quot_rel_trans h_weak_order p q y hpq hqy
+    -- q itself is not below q, by asymmetry
+    have hqq : q ∉ {y | q ≽[IndiffQuotRel rs h_weak_order] y} := by
+      refine Quot.induction_on q ?_
+      intro x hx
+      exact h_weak_order.left x x hx hx
+    -- Termwise ≤, and strictly < at the term q
+    refine Summable.tsum_lt_tsum (i := q) (fun y ↦ ?_) ?_
+      (hw_sum.indicator _) (hw_sum.indicator _)
+    · by_cases hy : y ∈ {y | q ≽[IndiffQuotRel rs h_weak_order] y}
+      · rw [Set.indicator_of_mem hy, Set.indicator_of_mem (hsub y hy)]
+      · rw [Set.indicator_of_notMem hy]
+        unfold Set.indicator
+        split_ifs
+        exacts [(hw_pos y).le, le_rfl]
+    · -- q is below p, so its weight counts for p but not for q
+      have hpq' : q ∈ {y | p ≽[IndiffQuotRel rs h_weak_order] y} := hpq
+      rw [Set.indicator_of_notMem hqq, Set.indicator_of_mem hpq']
+      exact hw_pos q
+  -- If not p ≻ q then uq p ≤ uq q: everything below p is below q
+  have huq_le : ∀ p q : IndiffQuot rs,
+      ¬ (p ≽[IndiffQuotRel rs h_weak_order] q) → uq p ≤ uq q := by
+    intro p q hnpq
+    -- Everything below p is below q, by negative transitivity
+    have hsub : ∀ y : IndiffQuot rs, y ∈ {y | p ≽[IndiffQuotRel rs h_weak_order] y} →
+        y ∈ {y | q ≽[IndiffQuotRel rs h_weak_order] y} := by
+      intro y hpy
+      by_contra hnqy
+      revert hnpq hpy hnqy
+      refine Quot.induction_on₃ p q y ?_
+      intro a b c hnab hac hnbc
+      exact h_weak_order.right a b c ⟨hnab, hnbc⟩ hac
+    -- So the sum for p is termwise ≤ the sum for q
+    refine Summable.tsum_le_tsum (fun y ↦ ?_) (hw_sum.indicator _) (hw_sum.indicator _)
+    by_cases hy : y ∈ {y | p ≽[IndiffQuotRel rs h_weak_order] y}
+    · rw [Set.indicator_of_mem hy, Set.indicator_of_mem (hsub y hy)]
+    · rw [Set.indicator_of_notMem hy]
+      unfold Set.indicator
+      split_ifs
+      exacts [(hw_pos y).le, le_rfl]
+  -- The representing function: the utility of an element is that of its class
+  refine ⟨fun x ↦ uq (Quot.mk _ x), ?_⟩
+  intro x y
+  constructor
+  · -- Forward direction: x ≻ y → f x > f y
+    intro hxy
+    exact huq_gt (Quot.mk _ x) (Quot.mk _ y) hxy
+  · -- Backward direction: f x > f y → x ≻ y
+    intro hfxy
+    by_contra hnxy
+    exact not_le.mpr hfxy (huq_le (Quot.mk _ x) (Quot.mk _ y) hnxy)
+
+/-
 Statment of Fishburn Theorem: A preference relation on a set satisfies
 being a weak order and order separability on the quotient induced, if and only if
 there exists a function f : Set → ℝ that strictly represents the preference relation.
@@ -279,7 +405,323 @@ theorem Fishburn_theorem (rs : Relation α) :
   ↔ ∃ f : α → ℝ, ordinal_consistent_strict f rs := by
   apply Iff.intro
   · -- Forward direction: weak order ∧ order_separable → ∃ function
-    sorry
+    intro h_exists
+    rcases h_exists with ⟨h_weak_order, h_order_separable⟩
+
+    -- Define the quotient set
+    let QuotSet := {q : IndiffQuot rs | True}
+    let rq := IndiffQuotRel rs h_weak_order
+
+    -- Extract the order dense set from the order separable property
+    rcases h_order_separable with ⟨D, h_countable, h_order_dense⟩
+
+    -- Define the set A as the order dense set D with the least and
+    -- greatest elements included
+    let A := D ∪ {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬ (p ≽[rq] q)}
+      ∪ {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬ (q ≽[rq] p)}
+
+    -- Show A is countable
+    have h_countable_A : Countable A := by
+      -- D is countable
+      have hD : D.Countable := Set.countable_coe_iff.mp h_countable
+      -- There is at most one greatest element: two greatest elements are
+      -- indifferent, hence equal in the quotient
+      have hmax : {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬ (p ≽[rq] q)}.Subsingleton := by
+        intro q₁ hq₁ q₂ hq₂
+        revert hq₁ hq₂
+        refine Quot.induction_on₂ q₁ q₂ ?_
+        intro x y hx hy
+        exact Quot.sound ⟨hy (Quot.mk _ x), hx (Quot.mk _ y)⟩
+      -- Likewise, there is at most one least element
+      have hmin : {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬ (q ≽[rq] p)}.Subsingleton := by
+        intro q₁ hq₁ q₂ hq₂
+        revert hq₁ hq₂
+        refine Quot.induction_on₂ q₁ q₂ ?_
+        intro x y hx hy
+        exact Quot.sound ⟨hx (Quot.mk _ y), hy (Quot.mk _ x)⟩
+      -- A is a union of three countable sets
+      exact Set.countable_coe_iff.mpr ((hD.union hmax.countable).union hmin.countable)
+
+    -- Show A is order dense in the quotient set
+    have h_order_dense_A : order_dense A rq := by
+      intro x y hxy
+      rcases hxy with ⟨hxy, hxA, hyA⟩
+      -- x and y are not in D either, since D ⊆ A
+      have hxD : x ∉ D := fun hx ↦ hxA (Or.inl (Or.inl hx))
+      have hyD : y ∉ D := fun hy ↦ hyA (Or.inl (Or.inl hy))
+      -- So D gives an element z strictly between x and y, and z ∈ D ⊆ A
+      rcases h_order_dense x y ⟨hxy, hxD, hyD⟩ with ⟨z, hzD, hxz, hzy⟩
+      exact ⟨z, Or.inl (Or.inl hzD), hxz, hzy⟩
+
+    -- Define above S b as the set of elements in S bigger than b
+    let above (S : Set (IndiffQuot rs)) (b : IndiffQuot rs) : Set (IndiffQuot rs) :=
+      {q : IndiffQuot rs | q ∈ S ∧ q ≽[rq] b}
+    -- Define below S b as the set of elements in S smaller than b
+    let below (S : Set (IndiffQuot rs)) (b : IndiffQuot rs) : Set (IndiffQuot rs) :=
+      {q : IndiffQuot rs | q ∈ S ∧ b ≽[rq] q}
+
+    -- a is a least element of above S b
+    let leastAbove (S : Set (IndiffQuot rs)) (b a : IndiffQuot rs) : Prop :=
+      a ∈ above S b ∧ ∀ a' ∈ above S b, ¬ (a ≽[rq] a')
+    -- c is a greatest element of below S b
+    let greatestBelow (S : Set (IndiffQuot rs)) (b c : IndiffQuot rs) : Prop :=
+      c ∈ below S b ∧ ∀ c' ∈ below S b, ¬ (c' ≽[rq] c)
+
+    -- Define B as the elements outside A such that above A b has a least element
+    -- or below A b has a greatest element
+    let B : Set (IndiffQuot rs) :=
+      {b : IndiffQuot rs | b ∉ A ∧ ((∃ a, leastAbove A b a) ∨ (∃ c, greatestBelow A b c))}
+
+    -- A given a can be the least element of above A b for at most one b ∉ A
+    have h_leastAbove_unique : ∀ a : IndiffQuot rs,
+        {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}.Subsingleton := by
+      intro a b₁ hb₁ b₂ hb₂
+      rcases hb₁ with ⟨hb₁A, ha₁, hmin₁⟩
+      rcases hb₂ with ⟨hb₂A, ha₂, hmin₂⟩
+      by_contra hne
+      rcases indiff_quot_rel_total h_weak_order b₁ b₂ hne with h12 | h21
+      · -- b₁ ≻ b₂: some z ∈ A lies strictly between, so z ∈ above A b₂ and a ≻ z
+        rcases h_order_dense_A b₁ b₂ ⟨h12, hb₁A, hb₂A⟩ with ⟨z, hzA, h1z, hz2⟩
+        exact hmin₂ z ⟨hzA, hz2⟩ (indiff_quot_rel_trans h_weak_order a b₁ z ha₁.2 h1z)
+      · -- b₂ ≻ b₁: symmetric
+        rcases h_order_dense_A b₂ b₁ ⟨h21, hb₂A, hb₁A⟩ with ⟨z, hzA, h2z, hz1⟩
+        exact hmin₁ z ⟨hzA, hz1⟩ (indiff_quot_rel_trans h_weak_order a b₂ z ha₂.2 h2z)
+
+    -- A given c can be the greatest element of below A b for at most one b ∉ A
+    have h_greatestBelow_unique : ∀ c : IndiffQuot rs,
+        {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}.Subsingleton := by
+      intro c b₁ hb₁ b₂ hb₂
+      rcases hb₁ with ⟨hb₁A, hc₁, hmax₁⟩
+      rcases hb₂ with ⟨hb₂A, hc₂, hmax₂⟩
+      by_contra hne
+      rcases indiff_quot_rel_total h_weak_order b₁ b₂ hne with h12 | h21
+      · -- b₁ ≻ b₂: some z ∈ A lies strictly between, so z ∈ below A b₁ and z ≻ c
+        rcases h_order_dense_A b₁ b₂ ⟨h12, hb₁A, hb₂A⟩ with ⟨z, hzA, h1z, hz2⟩
+        exact hmax₁ z ⟨hzA, h1z⟩ (indiff_quot_rel_trans h_weak_order z b₂ c hz2 hc₂.2)
+      · -- b₂ ≻ b₁: symmetric
+        rcases h_order_dense_A b₂ b₁ ⟨h21, hb₂A, hb₁A⟩ with ⟨z, hzA, h2z, hz1⟩
+        exact hmax₂ z ⟨hzA, h2z⟩ (indiff_quot_rel_trans h_weak_order z b₁ c hz1 hc₁.2)
+
+    -- B is countable: each part injects into the countable set A
+    have h_countable_B : Countable B := by
+      have hA : A.Countable := Set.countable_coe_iff.mp h_countable_A
+      -- b's whose above A b has a least element: at most one b for each a ∈ A
+      have hB₁ : (⋃ a ∈ A, {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}).Countable :=
+        hA.biUnion fun a _ ↦ (h_leastAbove_unique a).countable
+      -- b's whose below A b has a greatest element: at most one b for each c ∈ A
+      have hB₂ : (⋃ c ∈ A, {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}).Countable :=
+        hA.biUnion fun c _ ↦ (h_greatestBelow_unique c).countable
+      -- B is contained in the union of both
+      have hB_sub : B ⊆ (⋃ a ∈ A, {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}) ∪
+          (⋃ c ∈ A, {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}) := by
+        intro b hb
+        rcases hb with ⟨hbA, ⟨a, ha⟩ | ⟨c, hc⟩⟩
+        · -- above A b has least element a ∈ A
+          exact Or.inl (Set.mem_biUnion ha.1.1 ⟨hbA, ha⟩)
+        · -- below A b has greatest element c ∈ A
+          exact Or.inr (Set.mem_biUnion hc.1.1 ⟨hbA, hc⟩)
+      exact Set.countable_coe_iff.mpr ((hB₁.union hB₂).mono hB_sub)
+
+    -- Define C as A ∪ B, which is countable as a union of countable sets
+    let C : Set (IndiffQuot rs) := A ∪ B
+    have h_countable_C : Countable C :=
+      Set.countable_coe_iff.mpr ((Set.countable_coe_iff.mp h_countable_A).union
+        (Set.countable_coe_iff.mp h_countable_B))
+
+    -- (1) For b ∉ C, above C b has no least element
+    have h_no_leastAbove : ∀ b : IndiffQuot rs, b ∉ C → ¬ ∃ a, leastAbove C b a := by
+      intro b hbC hex
+      rcases hex with ⟨a, ⟨haC, hab⟩, hmin⟩
+      -- b ∉ A, since A ⊆ C
+      have hbA : b ∉ A := fun hb ↦ hbC (Or.inl hb)
+      -- a ∉ A: otherwise a is also least in above A b, so b ∈ B ⊆ C
+      have haA : a ∉ A := by
+        intro haA
+        apply hbC
+        exact Or.inr ⟨hbA, Or.inl ⟨a, ⟨haA, hab⟩, fun a' ha' ↦ hmin a' ⟨Or.inl ha'.1, ha'.2⟩⟩⟩
+      -- By order denseness, some z ∈ A ⊆ C lies strictly between a and b,
+      -- so z ∈ above C b and a ≻ z, contradicting that a is least
+      rcases h_order_dense_A a b ⟨hab, haA, hbA⟩ with ⟨z, hzA, haz, hzb⟩
+      exact hmin z ⟨Or.inl hzA, hzb⟩ haz
+    -- (2) For b ∉ C, below C b has no greatest element
+    have h_no_greatestBelow : ∀ b : IndiffQuot rs, b ∉ C → ¬ ∃ c, greatestBelow C b c := by
+      intro b hbC hex
+      rcases hex with ⟨c, ⟨hcC, hbc⟩, hmax⟩
+      -- b ∉ A, since A ⊆ C
+      have hbA : b ∉ A := fun hb ↦ hbC (Or.inl hb)
+      -- c ∉ A: otherwise c is also greatest in below A b, so b ∈ B ⊆ C
+      have hcA : c ∉ A := by
+        intro hcA
+        apply hbC
+        exact Or.inr ⟨hbA, Or.inr ⟨c, ⟨hcA, hbc⟩, fun c' hc' ↦ hmax c' ⟨Or.inl hc'.1, hc'.2⟩⟩⟩
+      -- By order denseness, some z ∈ A ⊆ C lies strictly between b and c,
+      -- so z ∈ below C b and z ≻ c, contradicting that c is greatest
+      rcases h_order_dense_A b c ⟨hbc, hbA, hcA⟩ with ⟨z, hzA, hbz, hzc⟩
+      exact hmax z ⟨Or.inl hzA, hbz⟩ hzc
+
+    -- The preference restricted to C
+    let rC : Relation C := fun a c ↦ a.1 ≽[rq] c.1
+    -- rC is a weak order, since rq is
+    have h_weak_order_C : weak_order rC := by
+      have hq := indiff_quot_rel_weak_order h_weak_order
+      exact ⟨fun a c ↦ hq.left a.1 c.1, fun a b c ↦ hq.right a.1 b.1 c.1⟩
+    -- The quotient of C is countable, since C is
+    have h_countable_quot_C : Countable (IndiffQuot rC) := by
+      have : Countable C := h_countable_C
+      unfold IndiffQuot
+      infer_instance
+    -- By Theorem 2.2, there is a utility uC on C representing rC
+    rcases countable_representation_theorem rC h_weak_order_C h_countable_quot_C with ⟨uC, huC⟩
+
+    -- u_b: the values of uC on the elements of C below b
+    let uBelow (b : IndiffQuot rs) : Set ℝ := {r : ℝ | ∃ c : C, b ≽[rq] c.1 ∧ uC c = r}
+    -- u^b: the values of uC on the elements of C above b
+    let uAbove (b : IndiffQuot rs) : Set ℝ := {r : ℝ | ∃ a : C, a.1 ≽[rq] b ∧ uC a = r}
+    -- For b ∉ C, both sets are nonempty
+    have h_uBelow_nonempty : ∀ b : IndiffQuot rs, b ∉ C → (uBelow b).Nonempty := by
+      intro b hbC
+      have hbA : b ∉ A := fun hb ↦ hbC (Or.inl hb)
+      -- b is not a least element, since those are in A; so some p is below b
+      have hnmin : ¬ ∀ p : IndiffQuot rs, ¬ (b ≽[rq] p) := fun h ↦ hbA (Or.inr h)
+      rcases not_forall.mp hnmin with ⟨p, hp⟩
+      have hbp : b ≽[rq] p := not_not.mp hp
+      by_cases hpC : p ∈ C
+      · -- p itself is in C
+        exact ⟨uC ⟨p, hpC⟩, ⟨p, hpC⟩, hbp, rfl⟩
+      · -- Otherwise, by order denseness some z ∈ A ⊆ C lies between b and p
+        have hpA : p ∉ A := fun h ↦ hpC (Or.inl h)
+        rcases h_order_dense_A b p ⟨hbp, hbA, hpA⟩ with ⟨z, hzA, hbz, hzp⟩
+        exact ⟨uC ⟨z, Or.inl hzA⟩, ⟨z, Or.inl hzA⟩, hbz, rfl⟩
+    have h_uAbove_nonempty : ∀ b : IndiffQuot rs, b ∉ C → (uAbove b).Nonempty := by
+      intro b hbC
+      have hbA : b ∉ A := fun hb ↦ hbC (Or.inl hb)
+      -- b is not a greatest element, since those are in A; so some p is above b
+      have hnmax : ¬ ∀ p : IndiffQuot rs, ¬ (p ≽[rq] b) := fun h ↦ hbA (Or.inl (Or.inr h))
+      rcases not_forall.mp hnmax with ⟨p, hp⟩
+      have hpb : p ≽[rq] b := not_not.mp hp
+      by_cases hpC : p ∈ C
+      · -- p itself is in C
+        exact ⟨uC ⟨p, hpC⟩, ⟨p, hpC⟩, hpb, rfl⟩
+      · -- Otherwise, by order denseness some z ∈ A ⊆ C lies between p and b
+        have hpA : p ∉ A := fun h ↦ hpC (Or.inl h)
+        rcases h_order_dense_A p b ⟨hpb, hpA, hbA⟩ with ⟨z, hzA, hpz, hzb⟩
+        exact ⟨uC ⟨z, Or.inl hzA⟩, ⟨z, Or.inl hzA⟩, hzb, rfl⟩
+    -- Every value in u_b is smaller than every value in u^b
+    have h_uBelow_lt_uAbove : ∀ b : IndiffQuot rs, ∀ r ∈ uBelow b, ∀ s ∈ uAbove b, r < s := by
+      intro b r hr s hs
+      rcases hr with ⟨c, hbc, hcr⟩
+      rcases hs with ⟨a, hab, has⟩
+      -- a ≻ b ≻ c, so a ≻ c, and hence uC a > uC c
+      have hac : rC a c := indiff_quot_rel_trans h_weak_order a.1 b c.1 hab hbc
+      rw [← hcr, ← has]
+      exact (huC a c).mp hac
+    -- (3.2): extend uC to the whole quotient (membership in C is decided classically)
+    classical
+    let u (q : IndiffQuot rs) : ℝ :=
+      if h : q ∈ C then uC ⟨q, h⟩ else (sSup (uBelow q) + sInf (uAbove q)) / 2
+    -- From (2): every value in u_b is strictly below sup u_b
+    have h_lt_sSup : ∀ b : IndiffQuot rs, b ∉ C → ∀ r ∈ uBelow b, r < sSup (uBelow b) := by
+      intro b hbC r hr
+      rcases hr with ⟨c, hbc, hcr⟩
+      -- u_b is bounded above by any value in u^b
+      rcases h_uAbove_nonempty b hbC with ⟨s, hs⟩
+      have hbdd : BddAbove (uBelow b) :=
+        ⟨s, fun r' hr' ↦ (h_uBelow_lt_uAbove b r' hr' s hs).le⟩
+      -- By (2), c is not greatest in below C b: some c' ∈ below C b has c' ≻ c
+      have hc' : ∃ c' ∈ below C b, c' ≽[rq] c.1 := by
+        by_contra hn
+        exact h_no_greatestBelow b hbC ⟨c.1, ⟨c.2, hbc⟩, fun c' hc' hcc ↦ hn ⟨c', hc', hcc⟩⟩
+      rcases hc' with ⟨c', hc'b, hc'c⟩
+      rcases hc'b with ⟨hc'C, hbc'⟩
+      -- So uC c < uC c' ≤ sup u_b
+      have hlt : uC c < uC ⟨c', hc'C⟩ := (huC ⟨c', hc'C⟩ c).mp hc'c
+      have hle : uC ⟨c', hc'C⟩ ≤ sSup (uBelow b) := le_csSup hbdd ⟨⟨c', hc'C⟩, hbc', rfl⟩
+      rw [← hcr]
+      exact lt_of_lt_of_le hlt hle
+    -- From (1): every value in u^b is strictly above inf u^b
+    have h_sInf_lt : ∀ b : IndiffQuot rs, b ∉ C → ∀ s ∈ uAbove b, sInf (uAbove b) < s := by
+      intro b hbC s hs
+      rcases hs with ⟨a, hab, has⟩
+      -- u^b is bounded below by any value in u_b
+      rcases h_uBelow_nonempty b hbC with ⟨r, hr⟩
+      have hbdd : BddBelow (uAbove b) :=
+        ⟨r, fun s' hs' ↦ (h_uBelow_lt_uAbove b r hr s' hs').le⟩
+      -- By (1), a is not least in above C b: some a' ∈ above C b has a ≻ a'
+      have ha' : ∃ a' ∈ above C b, a.1 ≽[rq] a' := by
+        by_contra hn
+        exact h_no_leastAbove b hbC ⟨a.1, ⟨a.2, hab⟩, fun a' ha' haa ↦ hn ⟨a', ha', haa⟩⟩
+      rcases ha' with ⟨a', ha'b, haa'⟩
+      rcases ha'b with ⟨ha'C, hab'⟩
+      -- So inf u^b ≤ uC a' < uC a
+      have hlt : uC ⟨a', ha'C⟩ < uC a := (huC a ⟨a', ha'C⟩).mp haa'
+      have hle : sInf (uAbove b) ≤ uC ⟨a', ha'C⟩ := csInf_le hbdd ⟨⟨a', ha'C⟩, hab', rfl⟩
+      rw [← has]
+      exact lt_of_le_of_lt hle hlt
+
+    -- On C, u agrees with uC
+    have h_u_C : ∀ q : IndiffQuot rs, ∀ hq : q ∈ C, u q = uC ⟨q, hq⟩ := by
+      intro q hq
+      exact dif_pos hq
+    -- For b ∉ C: u(c) < u(b) < u(a) for all values u(c) ∈ u_b and u(a) ∈ u^b
+    have h_u_between : ∀ b : IndiffQuot rs, b ∉ C →
+        (∀ r ∈ uBelow b, r < u b) ∧ (∀ s ∈ uAbove b, u b < s) := by
+      intro b hbC
+      have hu : u b = (sSup (uBelow b) + sInf (uAbove b)) / 2 := dif_neg hbC
+      -- sup u_b ≤ inf u^b, since every value below is smaller than every value above
+      have hsup_le : sSup (uBelow b) ≤ sInf (uAbove b) :=
+        csSup_le (h_uBelow_nonempty b hbC) (fun r hr ↦
+          le_csInf (h_uAbove_nonempty b hbC) (fun s hs ↦ (h_uBelow_lt_uAbove b r hr s hs).le))
+      constructor
+      · -- r < sup u_b ≤ u b
+        intro r hr
+        have hr_lt := h_lt_sSup b hbC r hr
+        rw [hu]
+        linarith
+      · -- u b ≤ inf u^b < s
+        intro s hs
+        have hs_gt := h_sInf_lt b hbC s hs
+        rw [hu]
+        linarith
+    -- u preserves the strict order: p ≻ q → u p > u q
+    have h_u_gt : ∀ p q : IndiffQuot rs, p ≽[rq] q → u p > u q := by
+      intro p q hpq
+      by_cases hpC : p ∈ C <;> by_cases hqC : q ∈ C
+      · -- p, q ∈ C: u is uC, which represents rC
+        rw [h_u_C p hpC, h_u_C q hqC]
+        exact (huC ⟨p, hpC⟩ ⟨q, hqC⟩).mp hpq
+      · -- p ∈ C, q ∉ C: u p is a value in u^q
+        rw [h_u_C p hpC]
+        exact (h_u_between q hqC).2 _ ⟨⟨p, hpC⟩, hpq, rfl⟩
+      · -- p ∉ C, q ∈ C: u q is a value in u_p
+        rw [h_u_C q hqC]
+        exact (h_u_between p hpC).1 _ ⟨⟨q, hqC⟩, hpq, rfl⟩
+      · -- p, q ∉ C: by order denseness some z ∈ A ⊆ C lies between, so u q < u z < u p
+        have hpA : p ∉ A := fun h ↦ hpC (Or.inl h)
+        have hqA : q ∉ A := fun h ↦ hqC (Or.inl h)
+        rcases h_order_dense_A p q ⟨hpq, hpA, hqA⟩ with ⟨z, hzA, hpz, hzq⟩
+        have hqz := (h_u_between q hqC).2 _ ⟨⟨z, Or.inl hzA⟩, hzq, rfl⟩
+        have hzp := (h_u_between p hpC).1 _ ⟨⟨z, Or.inl hzA⟩, hpz, rfl⟩
+        exact lt_trans hqz hzp
+    -- u represents the order on the quotient
+    have h_u_rep : ∀ p q : IndiffQuot rs, p ≽[rq] q ↔ u p > u q := by
+      intro p q
+      constructor
+      · -- Forward direction: p ≻ q → u p > u q
+        exact h_u_gt p q
+      · -- Backward direction: u p > u q → p ≻ q, by totality
+        intro hupq
+        by_contra hnpq
+        by_cases hpq_eq : p = q
+        · rw [hpq_eq] at hupq
+          exact lt_irrefl _ hupq
+        · rcases indiff_quot_rel_total h_weak_order p q hpq_eq with hpq | hqp
+          · exact hnpq hpq
+          · exact lt_asymm hupq (h_u_gt q p hqp)
+    -- (3.1): lift u to α
+    exact ⟨fun x ↦ u (Quot.mk _ x), fun x y ↦ h_u_rep (Quot.mk _ x) (Quot.mk _ y)⟩
+
+
+
   · -- Backward direction: ∃ function → weak order ∧ order_separable
     intro h_exists
     rcases h_exists with ⟨f, h_ord_cons_strict⟩
