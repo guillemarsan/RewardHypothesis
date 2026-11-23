@@ -60,7 +60,7 @@ def markov_recursive [inst : ConcatMixSpace α] (u : α → ℝ) : Prop :=
   (u (t ⊕ x) = u t.1 + (γ t).1 * u x) ∧ (u (inst.ε)) = 0
 
 def reward_function [ConcatMixSpace α] (u : α → ℝ) (r : Relation α) : Prop :=
-  ordinal_consistent u r ∧ p_linear u ∧ markov_recursive u
+  OrdinalConsistent u r ∧ p_linear u ∧ markov_recursive u
 
 
 /-

@@ -1,1413 +1,1451 @@
 /-
-Copyright (c) 2026 Guillermo Martín-Sanchez . All rights reserved.
+Copyright (c) 2026 Guillermo Martín-Sánchez. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Guillermo Martín-Sánchez
 -/
-
 import Mathlib.Algebra.Module.Basic
-import Mathlib.Data.Real.Basic
-import Mathlib.Order.Interval.Set.Defs
-import Mathlib.Data.Set.Countable
+import Mathlib.Algebra.Order.Archimedean.Basic
+import Mathlib.Analysis.SpecificLimits.Basic
 import Mathlib.Data.Countable.Defs
 import Mathlib.Data.Rat.Encodable
-import Mathlib.Algebra.Order.Archimedean.Basic
 import Mathlib.Data.Real.Archimedean
+import Mathlib.Data.Real.Basic
+import Mathlib.Data.Set.Countable
+import Mathlib.Order.Interval.Set.Defs
 import Mathlib.Topology.Defs.Basic
 import Mathlib.Topology.Instances.Real.Lemmas
 import Mathlib.Topology.MetricSpace.Basic
 import Mathlib.Topology.MetricSpace.ProperSpace.Real
-import Mathlib.Analysis.SpecificLimits.Basic
 
-/-
+/-!
+# Ordinal representation theorem
+
 Define a preference relation on a set and the axioms for ordinal representation.
-Then, state and prove ordinal theorem: ordinal representation and
-order separability on the quotient are equivalent to the existence of
-a ordinal consistent function.
+Then, state and prove the ordinal theorem: ordinal representation and order separability
+on the quotient are equivalent to the existence of an ordinal consistent function.
 -/
+
 namespace OrdinalRep
 
+variable {α : Type*}
 
-/-
-Define a preference measure on the set.
--/
+section Preferences
+
+/-! ## Preference relations -/
+
+/-! ### Definitions relating to ≽ -/
+
+/-- Preference relation ≽ on a set: `x ≽[r] y := r x y`. -/
 def Relation (α : Type*) := α → α → Prop
-notation lhs " ≽[" r "]" rhs:50 => r lhs rhs
+notation lhs " ≽[" r "] " rhs:50 => r lhs rhs
 
+/-- Strict preference (x ≻ y ⇔ x ≽ y ∧ y ⋡ x): `x ≻[r] y := x ≽[r] y ∧ ¬(y ≽[r] x)`. -/
+def Strict (r : Relation α) : Relation α :=
+  fun x y ↦ (x ≽[r] y) ∧ ¬(y ≽[r] x)
+notation lhs " ≻[" r "] " rhs:50 => Strict r lhs rhs
 
-/-
-Useful definitions relating to ≽
--/
-def strict (r : Relation α) : Relation α :=
-  fun x y => (x ≽[r] y) ∧ ¬(y ≽[r] x)
-notation lhs " ≻[" r "]" rhs:50 => strict r lhs rhs
+/-- Indifference (x ∼ y ⇔ x ≽ y ∧ y ≽ x): `x ∼[r] y := x ≽[r] y ∧ y ≽[r] x`. -/
+def Indiff (r : Relation α) : Relation α :=
+  fun x y ↦ (x ≽[r] y) ∧ (y ≽[r] x)
+notation lhs " ∼[" r "] " rhs:50 => Indiff r lhs rhs
 
-def indiff (r : Relation α) : Relation α :=
-  fun x y => (x ≽[r] y) ∧ (y ≽[r] x)
-notation lhs " ∼[" r "]" rhs:50 => indiff r lhs rhs
+/-- Indifference of a strict preference (x ∼ y ⇔ x ⊁ y ∧ y ⊁ x):
+`x ∼ₛ[r] y := ¬(x ≽[r] y) ∧ ¬(y ≽[r] x)`. -/
+def IndiffStrict (r : Relation α) : Relation α :=
+  fun x y ↦ ¬(x ≽[r] y) ∧ ¬(y ≽[r] x)
+notation lhs " ∼ₛ[" r "] " rhs:50 => IndiffStrict r lhs rhs
 
-def indiff_strict (r : Relation α) : Relation α :=
-  fun x y => ¬ (x ≽[r] y) ∧ ¬ (y ≽[r] x)
-notation lhs " ∼ₛ[" r "]" rhs:50 => indiff_strict r lhs rhs
-
+/-- ∼ is symmetric (x ∼ y ⇒ y ∼ x): `x ∼[r] y → y ∼[r] x`. -/
 lemma indiff_symm (r : Relation α) :
-  ∀ x y : α, (x ∼[r] y) → (y ∼[r] x) := by
-  intro x y h_xy
-  exact ⟨h_xy.right, h_xy.left⟩
+    ∀ x y : α, (x ∼[r] y) → (y ∼[r] x) := by
+  intro x y hxy
+  exact ⟨hxy.right, hxy.left⟩
 
-/-
-Define what it means for a function to represent the preference relation.
--/
+/-! ### Representing ≽ by a function -/
 
-def ordinal_consistent (u : α → ℝ) (r : Relation α) : Prop :=
+/-- u ordinal consistent with ≽ (x ≽ y ⇔ u(x) ≥ u(y)): `x ≽[r] y ↔ u x ≥ u y`. -/
+def OrdinalConsistent (u : α → ℝ) (r : Relation α) : Prop :=
   ∀ x y : α, (x ≽[r] y) ↔ (u x ≥ u y)
 
-def ordinal_consistent_strict (u : α → ℝ) (rs : Relation α) : Prop :=
+/-- u strictly ordinal consistent with ≻ (x ≻ y ⇔ u(x) > u(y)): `x ≽[rs] y ↔ u x > u y`. -/
+def OrdinalConsistentStrict (u : α → ℝ) (rs : Relation α) : Prop :=
   ∀ x y : α, (x ≽[rs] y) ↔ (u x > u y)
 
+/-! ### Ordinal axioms -/
 
-/-
-Define the axioms for ordinal representation on a preference relation.
--/
-def completeness (r : Relation α) : Prop :=
+/-- Completeness (x ≽ y ∨ y ≽ x): `x ≽[r] y ∨ y ≽[r] x`. -/
+def Completeness (r : Relation α) : Prop :=
   ∀ x y : α, x ≽[r] y ∨ y ≽[r] x
 
-def transitivity (r : Relation α) : Prop :=
+/-- Transitivity (x ≽ y ∧ y ≽ z ⇒ x ≽ z): `x ≽[r] y ∧ y ≽[r] z → x ≽[r] z`. -/
+def Transitivity (r : Relation α) : Prop :=
   ∀ x y z : α, (x ≽[r] y ∧ y ≽[r] z) → x ≽[r] z
 
-def ordinal (r : Relation α) : Prop :=
-  completeness r ∧
-  transitivity r
+/-- Ordinal (≽ complete ∧ transitive): `Completeness r ∧ Transitivity r`. -/
+def Ordinal (r : Relation α) : Prop :=
+  Completeness r ∧ Transitivity r
 
-/-
-Useful lemmas from these axioms
--/
+/-! ### Lemmas from the ordinal axioms -/
 
+/-- ≽ transitive ⇒ ∼ transitive (x ∼ y ∧ y ∼ z ⇒ x ∼ z):
+`Transitivity r → (x ∼[r] y ∧ y ∼[r] z → x ∼[r] z)`. -/
 lemma indiff_transitivity (r : Relation α) :
-  transitivity r → ∀ x y z : α, (x ∼[r] y ∧ y ∼[r] z) → (x ∼[r] z) := by
-  intro h_trans x y z h_xyz
-  rcases h_xyz with ⟨h_xy, h_yz⟩
-  exact ⟨h_trans x y z ⟨h_xy.left, h_yz.left⟩, h_trans z y x ⟨h_yz.right, h_xy.right⟩⟩
+    Transitivity r → ∀ x y z : α, (x ∼[r] y ∧ y ∼[r] z) → (x ∼[r] z) := by
+  intro htrans x y z hxyz
+  rcases hxyz with ⟨hxiy, hyiz⟩
+  exact ⟨htrans x y z ⟨hxiy.left, hyiz.left⟩, htrans z y x ⟨hyiz.right, hxiy.right⟩⟩
 
+/-- ≽ ordinal ⇒ x, y, z have an upper bound w (w ≽ x ∧ w ≽ y ∧ w ≽ z):
+`Ordinal r → ∃ w, w ≽[r] x ∧ w ≽[r] y ∧ w ≽[r] z`. -/
 lemma highest_element (r : Relation α) :
-  ordinal r → ∀ x y z : α, ∃ w : α, w ≽[r] x ∧ w ≽[r] y ∧ w ≽[r] z := by
-  intro h_ordinal
-  rcases h_ordinal with ⟨h_complete, h_trans⟩
+    Ordinal r → ∀ x y z : α, ∃ w : α, w ≽[r] x ∧ w ≽[r] y ∧ w ≽[r] z := by
+  intro hord
+  rcases hord with ⟨hcompl, _⟩
   intro x y z
-  have hxy := h_complete x y
-  have hxz := h_complete x z
-  have hyz := h_complete y z
-  have h_largest: (x ≽[r] y ∧ x ≽[r] z) ∨
-    (y ≽[r] x ∧ y ≽[r] z) ∨ (z ≽[r] x ∧ z ≽[r] y) := by
-    cases hxy <;> cases hxz <;> cases hyz <;> aesop
-  cases h_largest with
-    | inl h_x_l =>
-        exact ⟨x, ⟨(h_complete x x).elim id id, h_x_l⟩⟩
-    | inr h_inr =>
-      cases h_inr with
-      | inl h_y_l =>
-        exact ⟨y, ⟨h_y_l.left, (h_complete y y).elim id id, h_y_l.right⟩⟩
-      | inr h_z_l =>
-        exact ⟨z, ⟨h_z_l.left, h_z_l.right, (h_complete z z).elim id id⟩⟩
+  have hcxy := hcompl x y
+  have hcxz := hcompl x z
+  have hcyz := hcompl y z
+  have hlargest : (x ≽[r] y ∧ x ≽[r] z) ∨
+      (y ≽[r] x ∧ y ≽[r] z) ∨ (z ≽[r] x ∧ z ≽[r] y) := by
+    cases hcxy <;> cases hcxz <;> cases hcyz <;> aesop
+  cases hlargest with
+  | inl hx =>
+    exact ⟨x, (hcompl x x).elim id id, hx⟩
+  | inr hrest =>
+    cases hrest with
+    | inl hy =>
+      exact ⟨y, hy.left, (hcompl y y).elim id id, hy.right⟩
+    | inr hz =>
+      exact ⟨z, hz.left, hz.right, (hcompl z z).elim id id⟩
 
+/-- ≽ ordinal ⇒ x, y, z have a lower bound w (x ≽ w ∧ y ≽ w ∧ z ≽ w):
+`Ordinal r → ∃ w, x ≽[r] w ∧ y ≽[r] w ∧ z ≽[r] w`. -/
 lemma lowest_element (r : Relation α) :
-  ordinal r → ∀ x y z : α, ∃ w : α, x ≽[r] w ∧ y ≽[r] w ∧ z ≽[r] w := by
-  intro h_ordinal
-  rcases h_ordinal with ⟨h_complete, h_trans⟩
+    Ordinal r → ∀ x y z : α, ∃ w : α, x ≽[r] w ∧ y ≽[r] w ∧ z ≽[r] w := by
+  intro hord
+  rcases hord with ⟨hcompl, _⟩
   intro x y z
-  have hxy := h_complete x y
-  have hxz := h_complete x z
-  have hyz := h_complete y z
-  have h_smallest: (y ≽[r] x ∧ z ≽[r] x) ∨
-    (x ≽[r] y ∧ z ≽[r] y) ∨ (x ≽[r] z ∧ y ≽[r] z) := by
-    cases hxy <;> cases hxz <;> cases hyz <;> aesop
-  cases h_smallest with
-    | inl h_x_s =>
-        exact ⟨x, ⟨(h_complete x x).elim id id, h_x_s⟩⟩
-    | inr h_inr =>
-      cases h_inr with
-      | inl h_y_s =>
-        exact ⟨y, ⟨h_y_s.left, (h_complete y y).elim id id, h_y_s.right⟩⟩
-      | inr h_z_s =>
-        exact ⟨z, ⟨h_z_s.left, h_z_s.right, (h_complete z z).elim id id⟩⟩
+  have hcxy := hcompl x y
+  have hcxz := hcompl x z
+  have hcyz := hcompl y z
+  have hsmallest : (y ≽[r] x ∧ z ≽[r] x) ∨
+      (x ≽[r] y ∧ z ≽[r] y) ∨ (x ≽[r] z ∧ y ≽[r] z) := by
+    cases hcxy <;> cases hcxz <;> cases hcyz <;> aesop
+  cases hsmallest with
+  | inl hx =>
+    exact ⟨x, (hcompl x x).elim id id, hx⟩
+  | inr hrest =>
+    cases hrest with
+    | inl hy =>
+      exact ⟨y, hy.left, (hcompl y y).elim id id, hy.right⟩
+    | inr hz =>
+      exact ⟨z, hz.left, hz.right, (hcompl z z).elim id id⟩
 
-lemma indiff_eq_indiff_strict {r : Relation α} :
-  ordinal r → ∀ x y : α, (x ∼[r] y) ↔ (x ∼ₛ[strict r] y) := by
-  intro h_ordinal x y
-  apply Iff.intro
-  · -- Forward direction: x ∼[r] y → x ∼ₛ[strict r] y
-    intro h_xy
-    rcases h_xy with ⟨h_xy1, h_xy2⟩
-    constructor
-    · -- ¬(x ≽[strict r] y)
-      intro h_xgy
-      rcases h_xgy with ⟨h_xgy1, h_xgy2⟩
-      exact h_xgy2 h_xy2
-    · -- ¬(y ≽[strict r] x)
-      intro h_ygx
-      rcases h_ygx with ⟨h_ygx1, h_ygx2⟩
-      exact h_ygx2 h_xy1
-  · -- Backward direction: x ∼ₛ[strict r] y → x ∼[r] y
-    intro h_xy
-    rcases h_xy with ⟨h_nxgy, h_nygx⟩
-    have h_yx_exp := not_and_or.mp h_nygx
-    have h_xgy_exp := not_and_or.mp h_nxgy
-    constructor
-    · -- x ≽[r] y
-        by_contra h_not
-        have h_yx := Or.resolve_left (h_ordinal.left x y) h_not
-        have h_xy := not_not.mp (Or.resolve_left h_yx_exp (not_not.mpr h_yx))
-        exact (h_not h_xy).elim
-    · -- y ≽[r] x
-      by_contra h_not
-      have h_xy := Or.resolve_right (h_ordinal.left x y) h_not
-      have h_yx := not_not.mp (Or.resolve_left h_xgy_exp (not_not.mpr h_xy))
-      exact (h_not h_yx).elim
+end Preferences
 
+section StrictPreferences
 
-/-
-Axioms for the associated strict preference relation
--/
+/-! ## Strict preferences -/
 
-def asymmetry (rs : Relation α) : Prop :=
+/-! ### Axioms for ≻ -/
+
+/-- Asymmetry (x ≻ y ⇒ y ⊁ x): `x ≽[rs] y → ¬(y ≽[rs] x)`. -/
+def Asymmetry (rs : Relation α) : Prop :=
   ∀ x y : α, (x ≽[rs] y) → ¬(y ≽[rs] x)
 
-def negative_transitivity (rs : Relation α) : Prop :=
+/-- Negative transitivity (x ⊁ y ∧ y ⊁ z ⇒ x ⊁ z):
+`¬(x ≽[rs] y) ∧ ¬(y ≽[rs] z) → ¬(x ≽[rs] z)`. -/
+def NegativeTransitivity (rs : Relation α) : Prop :=
   ∀ x y z : α, ¬(x ≽[rs] y) ∧ ¬(y ≽[rs] z) → ¬(x ≽[rs] z)
 
-def weak_order (rs : Relation α) : Prop :=
-  asymmetry rs ∧ negative_transitivity rs
+/-- Weak order (≻ asymmetric ∧ negatively transitive):
+`Asymmetry rs ∧ NegativeTransitivity rs`. -/
+def WeakOrder (rs : Relation α) : Prop :=
+  Asymmetry rs ∧ NegativeTransitivity rs
 
-/-
-Definition of quotient space X \ ∼ and relation on the quotient >
--/
-def IndiffQuot (rs : Relation α) : Type* :=
-  Quot (fun x y  => (x ∼ₛ[rs] y))
+/-! ### Relating ≽ and ≻ (used for the ordinal theorem) -/
 
-def IndiffQuotRel (rs : Relation α) (h : weak_order rs) : IndiffQuot rs → IndiffQuot rs → Prop :=
-  Quot.lift₂ (r := fun x y => x ∼ₛ[rs] y) (s := fun x y => x ∼ₛ[rs] y) (fun x y => x ≽[rs] y)
-  (by
-    intro a b₁ b₂ h_b1b2
-    rcases h_b1b2 with ⟨h_nb1b2, h_nb2b1⟩
-    apply propext
+/-- ≽ ordinal ⇒ (x ∼ y ⇔ x ⊁ y ∧ y ⊁ x):
+`Ordinal r → (x ∼[r] y ↔ x ∼ₛ[Strict r] y)`. -/
+lemma indiff_iff_indiffStrict {r : Relation α} :
+    Ordinal r → ∀ x y : α, (x ∼[r] y) ↔ (x ∼ₛ[Strict r] y) := by
+  intro hord x y
+  constructor
+  · -- ===== Forward direction: x ∼[r] y → x ∼ₛ[strict r] y =====
+    intro hxiy
+    rcases hxiy with ⟨hxy, hyx⟩
     constructor
-    · intro h_ab1
-      by_contra h_nab2
-      have h_nab1 := h.right a b₂ b₁ ⟨h_nab2, h_nb2b1⟩
-      exact h_nab1 h_ab1
-    · intro h_ab2
-      by_contra h_nab1
-      have h_nab2 := h.right a b₁ b₂ ⟨h_nab1, h_nb1b2⟩
-      exact h_nab2 h_ab2
-  )
-  (by
-    intro a₁ a₂ b h_a1a2
-    rcases h_a1a2 with ⟨h_na1a2, h_na2a1⟩
-    apply propext
+    · -- ¬(x ≽[strict r] y)
+      intro hxsy
+      rcases hxsy with ⟨_, hnyx⟩
+      exact hnyx hyx
+    · -- ¬(y ≽[strict r] x)
+      intro hysx
+      rcases hysx with ⟨_, hnxy⟩
+      exact hnxy hxy
+  · -- ===== Backward direction: x ∼ₛ[strict r] y → x ∼[r] y =====
+    intro hxisy
+    rcases hxisy with ⟨hnxsy, hnysx⟩
     constructor
-    · intro h_a1b
-      by_contra h_na2b
-      have h_na1b := h.right a₁ a₂ b ⟨h_na1a2, h_na2b⟩
-      exact h_na1b h_a1b
-    · intro h_a2b
-      by_contra h_na1b
-      have h_na2b := h.right a₂ a₁ b ⟨h_na2a1, h_na1b⟩
-      exact h_na2b h_a2b
-  )
+    · -- x ≽[r] y
+      by_contra hnxy
+      have hyx := Or.resolve_left (hord.left x y) hnxy
+      exact hnysx ⟨hyx, hnxy⟩
+    · -- y ≽[r] x
+      by_contra hnyx
+      have hxy := Or.resolve_right (hord.left x y) hnyx
+      exact hnxsy ⟨hxy, hnyx⟩
 
-/-
-Axioms for order separability in quotient space
--/
-def order_dense (D : Set α) (rs : Relation α) : Prop :=
+/-- ≽ ordinal ⇒ ≻ weak order: `Ordinal r → WeakOrder (Strict r)`. -/
+lemma weakOrder_of_ordinal {r : Relation α} :
+    Ordinal r → WeakOrder (Strict r) := by
+  intro hord
+  -- Show that rs is a weak order from r being ordinal
+  have hcompl := hord.left
+  have htrans := hord.right
+  have hwo : WeakOrder (Strict r) := by
+    constructor
+    · -- ===== Asymmetry =====
+      intro x y hxsy hysx
+      exact hysx.right hxsy.left
+    · -- ===== Negative transitivity =====
+      -- We get y ≽ x and z ≽ y from the negations
+      intro x y z hn hxsz
+      rcases hn with ⟨hnxsy, hnysz⟩
+      have hyx : y ≽[r] x := by
+        rcases not_and_or.mp hnxsy with hnxy | hnnyx
+        · exact Or.resolve_left (hcompl x y) hnxy
+        · exact not_not.mp hnnyx
+      have hzy : z ≽[r] y := by
+        rcases not_and_or.mp hnysz with hnyz | hnnzy
+        · exact Or.resolve_left (hcompl y z) hnyz
+        · exact not_not.mp hnnzy
+      -- Apply transitivity to get z ≽ x and contradiction with x > z
+      exact hxsz.right (htrans z y x ⟨hzy, hyx⟩)
+  exact hwo
+
+/-- ≽ complete ⇒ (≽ ordinal ⇔ ≻ weak order):
+`Completeness r → (Ordinal r ↔ WeakOrder (Strict r))`. -/
+lemma ordinal_iff_weakOrder_of_completeness {r : Relation α} :
+    Completeness r → (Ordinal r ↔ WeakOrder (Strict r)) := by
+  intro hcompl
+  constructor
+  · -- ===== Forward direction: ordinal r → weak_order (strict r) =====
+    -- Always true, without completeness
+    intro hord
+    exact weakOrder_of_ordinal hord
+  · -- ===== Backward direction: weak_order (strict r) → ordinal r =====
+    intro hwo
+    rcases hwo with ⟨_, hnegtrans⟩
+    constructor
+    · -- ===== Completeness =====
+      exact hcompl
+    · -- ===== Transitivity =====
+      intro x y z hxyz
+      rcases hxyz with ⟨hxy, hyz⟩
+      have hnzsx : ¬(z ≻[r] x) := by
+        have hnysx : ¬(y ≻[r] x) := by
+          intro hysx
+          exact hysx.right hxy
+        have hnzsy : ¬(z ≻[r] y) := by
+          intro hzsy
+          exact hzsy.right hyz
+        exact hnegtrans z y x ⟨hnzsy, hnysx⟩
+      cases not_and_or.mp hnzsx with
+      | inl hnzx => exact Or.resolve_left (hcompl z x) hnzx
+      | inr hnnxz => exact not_not.mp hnnxz
+
+/-- f consistent with ≽ ⇒ f strictly consistent with ≻:
+`OrdinalConsistent f r → OrdinalConsistentStrict f (Strict r)`. -/
+lemma ordinalConsistentStrict_of_ordinalConsistent {r : Relation α} {f : α → ℝ} :
+    OrdinalConsistent f r → OrdinalConsistentStrict f (Strict r) := by
+  intro hoc x y
+  constructor
+  · -- ===== x ≻[r] y → f x > f y =====
+    intro hxsy
+    have hnfyx : ¬(f y ≥ f x) := by
+      intro hfyx
+      have hyx : y ≽[r] x := (hoc y x).mpr hfyx
+      exact hxsy.right hyx
+    exact lt_of_not_ge hnfyx
+  · -- ===== f x > f y → x ≻[r] y =====
+    intro hfxsy
+    have hnyx : ¬(y ≽[r] x) := by
+      intro hyx
+      have hfyx := (hoc y x).mp hyx
+      exact not_lt.mpr hfyx hfxsy
+    have hxy : x ≽[r] y := (hoc x y).mpr (le_of_lt hfxsy)
+    exact ⟨hxy, hnyx⟩
+
+/-- ≽ complete ⇒ (f consistent with ≽ ⇔ f strictly consistent with ≻):
+`Completeness r → (OrdinalConsistent f r ↔ OrdinalConsistentStrict f (Strict r))`. -/
+lemma ordinalConsistent_iff_ordinalConsistentStrict_of_completeness {r : Relation α} {f : α → ℝ} :
+    Completeness r → (OrdinalConsistent f r ↔ OrdinalConsistentStrict f (Strict r)) := by
+  intro hcompl
+  constructor
+  · -- ===== Forward direction =====
+    -- ordinal_consistent f r → ordinal_consistent_strict f (strict r)
+    -- Always true, without completeness
+    intro hoc
+    exact ordinalConsistentStrict_of_ordinalConsistent hoc
+  · -- ===== Backward direction =====
+    -- ordinal_consistent_strict f (strict r) → ordinal_consistent f r
+    intro hocs x y
+    constructor
+    · -- ===== x ≽[r] y → f x ≥ f y =====
+      intro hxy
+      have hnysx : ¬(y ≻[r] x) := by
+        intro hysx
+        exact hysx.right hxy
+      have hnfysx : ¬(f y > f x) := by
+        intro hfysx
+        exact hnysx ((hocs y x).mpr hfysx)
+      exact le_of_not_gt hnfysx
+    · -- ===== f x ≥ f y → x ≽[r] y =====
+      intro hfxy
+      have hnysx : ¬(y ≻[r] x) := by
+        intro hysx
+        have hfysx := (hocs y x).mp hysx
+        exact not_le.mpr hfysx hfxy
+      cases not_and_or.mp hnysx with
+      | inl hnyx => exact Or.resolve_right (hcompl x y) hnyx
+      | inr hnnxy => exact not_not.mp hnnxy
+
+end StrictPreferences
+
+section Quotient
+
+/-! ## The quotient X/∼ -/
+
+/-! ### Quotient, relation and lifted function -/
+
+/-- Quotient X/∼ by indifference (X/∼ = {[x] : x ∈ X}, [x] = {y ∈ X : y ∼ x}):
+`IndiffQuot rs := Quot (fun x y ↦ x ∼ₛ[rs] y)`. -/
+def IndiffQuot (rs : Relation α) : Type _ :=
+  Quot (fun x y ↦ x ∼ₛ[rs] y)
+
+/-- Relation on the quotient ([x] ≻ [y] ⇔ x ≻ y):
+`Quot.mk _ x ≽[IndiffQuotRel rs h] Quot.mk _ y ↔ x ≽[rs] y`. -/
+def IndiffQuotRel (rs : Relation α) (h : WeakOrder rs) :
+    IndiffQuot rs → IndiffQuot rs → Prop :=
+  Quot.lift₂ (r := fun x y ↦ x ∼ₛ[rs] y) (s := fun x y ↦ x ∼ₛ[rs] y) (fun x y ↦ x ≽[rs] y)
+    (by
+      intro a b₁ b₂ hb₁isb₂
+      rcases hb₁isb₂ with ⟨hnb₁sb₂, hnb₂sb₁⟩
+      apply propext
+      constructor
+      · -- a ≽[rs] b₁ → a ≽[rs] b₂
+        intro hasb₁
+        by_contra hnasb₂
+        have hnasb₁ := h.right a b₂ b₁ ⟨hnasb₂, hnb₂sb₁⟩
+        exact hnasb₁ hasb₁
+      · -- a ≽[rs] b₂ → a ≽[rs] b₁
+        intro hasb₂
+        by_contra hnasb₁
+        have hnasb₂ := h.right a b₁ b₂ ⟨hnasb₁, hnb₁sb₂⟩
+        exact hnasb₂ hasb₂)
+    (by
+      intro a₁ a₂ b ha₁isa₂
+      rcases ha₁isa₂ with ⟨hna₁sa₂, hna₂sa₁⟩
+      apply propext
+      constructor
+      · -- a₁ ≽[rs] b → a₂ ≽[rs] b
+        intro ha₁sb
+        by_contra hna₂sb
+        have hna₁sb := h.right a₁ a₂ b ⟨hna₁sa₂, hna₂sb⟩
+        exact hna₁sb ha₁sb
+      · -- a₂ ≽[rs] b → a₁ ≽[rs] b
+        intro ha₂sb
+        by_contra hna₁sb
+        have hna₂sb := h.right a₂ a₁ b ⟨hna₂sa₁, hna₁sb⟩
+        exact hna₂sb ha₂sb)
+
+/-- Function induced on X/∼ by f strictly consistent with ≻ (f̄([x]) = f(x)):
+`liftQuot f hocs (Quot.mk _ x) = f x`. -/
+def liftQuot {rs : Relation α} (f : α → ℝ)
+    (hocs : OrdinalConsistentStrict f rs) : IndiffQuot rs → ℝ :=
+  Quot.lift (r := fun x y ↦ x ∼ₛ[rs] y) f
+    (by
+      -- a ∼ₛ[rs] b → f a = f b
+      intro a b haisb
+      rcases haisb with ⟨hnasb, hnbsa⟩
+      have hfaeb : f a = f b := by
+        have hfab : f a ≥ f b := by
+          by_contra hnfab
+          have hfasb := lt_of_not_ge hnfab
+          exact hnbsa ((hocs b a).mpr hfasb)
+        have hfba : f b ≥ f a := by
+          by_contra hnfba
+          have hfbsa := lt_of_not_ge hnfba
+          exact hnasb ((hocs a b).mpr hfbsa)
+        exact le_antisymm hfba hfab
+      exact hfaeb)
+
+/-! ### Order separability -/
+
+/-- D order dense (x ≻ y ∧ x, y ∉ D ⇒ ∃ z ∈ D, x ≻ z ≻ y):
+`(x ≽[rs] y) ∧ x ∉ D ∧ y ∉ D → ∃ z ∈ D, (x ≽[rs] z ∧ z ≽[rs] y)`. -/
+def OrderDense (D : Set α) (rs : Relation α) : Prop :=
   ∀ x y : α, (x ≽[rs] y) ∧ x ∉ D ∧ y ∉ D → ∃ z ∈ D, (x ≽[rs] z ∧ z ≽[rs] y)
 
-def order_separable (rs : Relation α) : Prop :=
-  ∃ D : Set α, Countable D ∧ order_dense D rs
+/-- Order separable (∃ D countable ∧ order dense): `∃ D : Set α, Countable D ∧ OrderDense D rs`. -/
+def OrderSeparable (rs : Relation α) : Prop :=
+  ∃ D : Set α, Countable D ∧ OrderDense D rs
 
-/-
-Lemmas for the proof of Fishburn's theorem
--/
+end Quotient
 
--- Two distinct elements of the quotient are strictly comparable
-lemma indiff_quot_rel_total {rs : Relation α} (h : weak_order rs) :
+section Fishburn
+
+/-! ## Fishburn's theorem -/
+
+/-! ### Lemmas -/
+
+/-! #### Lemmas on the quotient -/
+
+/-- Two distinct elements of the quotient are strictly comparable (p ≠ q ⇒ p ≻ q ∨ q ≻ p):
+`p ≠ q → (p ≽[IndiffQuotRel rs h] q) ∨ (q ≽[IndiffQuotRel rs h] p)`. -/
+lemma indiffQuotRel_total {rs : Relation α} (h : WeakOrder rs) :
     ∀ p q : IndiffQuot rs, p ≠ q →
     (p ≽[IndiffQuotRel rs h] q) ∨ (q ≽[IndiffQuotRel rs h] p) := by
   intro p q
   refine Quot.induction_on₂ p q ?_
-  intro x y hxy
+  intro x y hxney
   by_contra hn
-  rcases not_or.mp hn with ⟨hnxy, hnyx⟩
-  exact hxy (Quot.sound ⟨hnxy, hnyx⟩)
+  rcases not_or.mp hn with ⟨hnxsy, hnysx⟩
+  exact hxney (Quot.sound ⟨hnxsy, hnysx⟩)
 
--- The strict order on the quotient is transitive
-lemma indiff_quot_rel_trans {rs : Relation α} (h : weak_order rs) :
+/-- The strict order on the quotient is transitive (p ≻ q ∧ q ≻ r ⇒ p ≻ r):
+`p ≽[IndiffQuotRel rs h] q → q ≽[IndiffQuotRel rs h] r → p ≽[IndiffQuotRel rs h] r`. -/
+lemma indiffQuotRel_trans {rs : Relation α} (h : WeakOrder rs) :
     ∀ p q r : IndiffQuot rs, p ≽[IndiffQuotRel rs h] q → q ≽[IndiffQuotRel rs h] r →
     p ≽[IndiffQuotRel rs h] r := by
   intro p q r
   refine Quot.induction_on₃ p q r ?_
-  intro x y z hxy hyz
-  by_contra hnxz
-  exact h.right y x z ⟨h.left x y hxy, hnxz⟩ hyz
+  intro x y z hxsy hysz
+  by_contra hnxsz
+  exact h.right y x z ⟨h.left x y hxsy, hnxsz⟩ hysz
 
--- The relation on the quotient is again a weak order
-lemma indiff_quot_rel_weak_order {rs : Relation α} (h : weak_order rs) :
-    weak_order (IndiffQuotRel rs h) := by
+/-- The relation on the quotient is again a weak order (≻ weak order ⇒ ≻ on X/∼ weak order):
+`WeakOrder (IndiffQuotRel rs h)`. -/
+lemma indiffQuotRel_weakOrder {rs : Relation α} (h : WeakOrder rs) :
+    WeakOrder (IndiffQuotRel rs h) := by
   constructor
-  · -- Asymmetry
+  · -- ===== Asymmetry =====
     intro p q
     refine Quot.induction_on₂ p q ?_
-    intro x y hxy
-    exact h.left x y hxy
-  · -- Negative transitivity
+    intro x y hxsy
+    exact h.left x y hxsy
+  · -- ===== Negative transitivity =====
     intro p q r
     refine Quot.induction_on₃ p q r ?_
     intro x y z hn
     exact h.right x y z hn
 
-lemma interval_endpoint_inside_of_intersection
-  {a l₁ u₁ l₂ u₂ : ℝ}
-  (h₁ : l₁ < a ∧ a < u₁)
-  (h₂ : l₂ < a ∧ a < u₂)
-  (hneq :
-      (l₁ = l₂ → u₁ ≠ u₂) ∧
-      (u₁ = u₂ → l₁ ≠ l₂)) :
-  (l₁ < l₂ ∧ l₂ < u₁) ∨
-  (l₁ < u₂ ∧ u₂ < u₁) ∨
-  (l₂ < l₁ ∧ l₁ < u₂) ∨
-  (l₂ < u₁ ∧ u₁ < u₂) :=
-by
+/-! #### Lemmas on the lifted function -/
+
+/-- The lifted function strictly represents the relation on the quotient
+([x] ≻ [y] ⇔ f̄([x]) > f̄([y])):
+`OrdinalConsistentStrict (liftQuot f hocs) (IndiffQuotRel rs hwo)`. -/
+lemma liftQuot_ordinalConsistentStrict {rs : Relation α} {f : α → ℝ}
+    (hocs : OrdinalConsistentStrict f rs) (hwo : WeakOrder rs) :
+    OrdinalConsistentStrict (liftQuot f hocs) (IndiffQuotRel rs hwo) := by
+  let rq := IndiffQuotRel rs hwo
+  let fq := liftQuot f hocs
+  change ∀ (a b : IndiffQuot rs), (a ≽[rq] b) ↔ (fq a > fq b)
+  intro a b
+  constructor
+  · -- ===== Forward direction: a ≽[rq] b → fq a > fq b =====
+    refine Quot.induction_on₂ a b ?_
+    intro x y hasb
+    have hxsy : x ≽[rs] y := by
+      simp only [rq, IndiffQuotRel] at hasb
+      exact hasb
+    have hfxsy : f x > f y := (hocs x y).mp hxsy
+    exact hfxsy
+  · -- ===== Backward direction: fq a > fq b → a ≽[rq] b =====
+    refine Quot.induction_on₂ a b ?_
+    intro x y hfasb
+    have hfxsy : f x > f y := hfasb
+    have hxsy : x ≽[rs] y := (hocs x y).mpr hfxsy
+    simp only [rq, IndiffQuotRel]
+    exact hxsy
+
+/-- Two classes are equal ⇔ the lifted function takes the same value on them
+([x] = [y] ⇔ f̄([x]) = f̄([y])):
+`(a = b) ↔ (liftQuot f hocs a = liftQuot f hocs b)`. -/
+lemma liftQuot_eq_iff {rs : Relation α} {f : α → ℝ}
+    (hocs : OrdinalConsistentStrict f rs) (hwo : WeakOrder rs) :
+    ∀ (a b : IndiffQuot rs), (a = b) ↔ (liftQuot f hocs a = liftQuot f hocs b) := by
+  let rq := IndiffQuotRel rs hwo
+  let fq := liftQuot f hocs
+  have hocsq : ∀ (a b : IndiffQuot rs), (a ≽[rq] b) ↔ (fq a > fq b) :=
+    liftQuot_ordinalConsistentStrict hocs hwo
+  intro a b
+  constructor
+  · -- ===== Forward direction: a = b → fq a = fq b =====
+    intro haeb
+    rw [haeb]
+  · -- ===== Backward direction: fq a = fq b → a = b =====
+    intro hfaeb
+    have hnfasb : ¬(fq a > fq b) := by
+      have hor₁ : (fq b = fq a) ∨ (fq a < fq b) := Or.inl hfaeb.symm
+      exact not_lt_iff_eq_or_lt.mpr hor₁
+    have hnfbsa : ¬(fq b > fq a) := by
+      have hor₂ : (fq a = fq b) ∨ (fq b < fq a) := Or.inl hfaeb
+      exact not_lt_iff_eq_or_lt.mpr hor₂
+    have hnasb : ¬(a ≽[rq] b) := by
+      intro hasb
+      have hfasb := (hocsq a b).mp hasb
+      exact hnfasb hfasb
+    have hnbsa : ¬(b ≽[rq] a) := by
+      intro hbsa
+      have hfbsa := (hocsq b a).mp hbsa
+      exact hnfbsa hfbsa
+    have haeb : a = b := by
+      revert hnasb hnbsa
+      refine Quot.induction_on₂ a b ?_
+      intro x y hnasb hnbsa
+      have hnxsy : ¬(x ≽[rs] y) := by
+        intro hxsy
+        simp only [rq, IndiffQuotRel] at hnasb
+        exact hnasb hxsy
+      have hnysx : ¬(y ≽[rs] x) := by
+        intro hysx
+        simp only [rq, IndiffQuotRel] at hnbsa
+        exact hnbsa hysx
+      have hxisy : x ∼ₛ[rs] y := ⟨hnxsy, hnysx⟩
+      exact Quot.sound hxisy
+    exact haeb
+
+/-! #### Interval lemma -/
+
+/-- If a ∈ (l₁, u₁) ∩ (l₂, u₂) and the intervals differ, an endpoint of one interval lies
+inside the other:
+`(l₁ < l₂ ∧ l₂ < u₁) ∨ (l₁ < u₂ ∧ u₂ < u₁) ∨ (l₂ < l₁ ∧ l₁ < u₂) ∨ (l₂ < u₁ ∧ u₁ < u₂)`. -/
+lemma interval_endpoint_inside_of_intersection {a l₁ u₁ l₂ u₂ : ℝ}
+    (h₁ : l₁ < a ∧ a < u₁) (h₂ : l₂ < a ∧ a < u₂)
+    (hneq : (l₁ = l₂ → u₁ ≠ u₂) ∧ (u₁ = u₂ → l₁ ≠ l₂)) :
+    (l₁ < l₂ ∧ l₂ < u₁) ∨ (l₁ < u₂ ∧ u₂ < u₁) ∨ (l₂ < l₁ ∧ l₁ < u₂) ∨ (l₂ < u₁ ∧ u₁ < u₂) := by
   rcases h₁ with ⟨h₁l, h₁u⟩
   rcases h₂ with ⟨h₂l, h₂u⟩
-  have h_overlap₁ : l₁ < u₂ := by linarith
-  have h_overlap₂ : l₂ < u₁ := by linarith
-  -- split on whether lower endpoints are equal
+  have hoverlap₁ : l₁ < u₂ := by linarith
+  have hoverlap₂ : l₂ < u₁ := by linarith
+  -- Split on whether lower endpoints are equal
   by_cases hll : l₁ = l₂
-  · -- lower endpoints equal → upper endpoints differ
+  · -- ===== Lower endpoints equal → upper endpoints differ =====
     have huu : u₁ ≠ u₂ := hneq.1 hll
     have hu : u₂ < u₁ ∨ u₁ < u₂ := lt_or_gt_of_ne huu.symm
     cases hu with
     | inl h =>
-        -- u₂ < u₁
-        right; left
-        exact ⟨h_overlap₁, h⟩
+      -- u₂ < u₁
+      right; left
+      exact ⟨hoverlap₁, h⟩
     | inr h =>
-        -- u₁ < u₂
-        right; right; right
-        exact ⟨h_overlap₂, h⟩
-  · -- lower endpoints differ
+      -- u₁ < u₂
+      right; right; right
+      exact ⟨hoverlap₂, h⟩
+  · -- ===== Lower endpoints differ =====
     have hl : l₁ < l₂ ∨ l₂ < l₁ := lt_or_gt_of_ne hll
     cases hl with
     | inl h =>
-        -- l₁ < l₂
-        left
-        exact ⟨h, h_overlap₂⟩
+      -- l₁ < l₂
+      left
+      exact ⟨h, hoverlap₂⟩
     | inr h =>
-        -- l₂ < l₁
-        right; right; left
-        exact ⟨h, h_overlap₁⟩
+      -- l₂ < l₁
+      right; right; left
+      exact ⟨h, hoverlap₁⟩
 
-/-
-Countable representation theorem: if a preference relation is a weak order and the
-quotient by indifference is countable, then there exists a function f : Set → ℝ that
-strictly represents the preference relation.
+/-! #### Countable representation theorem -/
+
+/-- Countable representation theorem (≻ weak order ∧ X/∼ countable ⇒ ∃ f : X → ℝ with
+x ≻ y ⇔ f(x) > f(y)):
+`WeakOrder rs → Countable (IndiffQuot rs) → ∃ f : α → ℝ, OrdinalConsistentStrict f rs`.
+
 Used in the main Fishburn theorem as a key step to construct the representing function.
-Statement from: Fishburn (1970) "Utility Theory for Decision Making" Theorem 2.2,
-Proof: Non-inductive construction of Voorneveld & Weibull,
-"An Elementary Proof That Well-Behaved Utility Functions Exist", pre Theorem 1, which is more
-natural in Lean than Fishburn's: the utility of a class is the total weight of the classes below it.
--/
+Statement from: Fishburn (1970) "Utility Theory for Decision Making" Theorem 2.2.
+Proof: non-inductive construction of Voorneveld & Weibull, "An Elementary Proof That
+Well-Behaved Utility Functions Exist", pre Theorem 1, which is more natural in Lean than
+Fishburn's: the utility of a class is the total weight of the classes below it,
+u([x]) = ∑_{[y] ≺ [x]} (1/2)^{n([y])}. -/
 theorem countable_representation_theorem (rs : Relation α) :
-    weak_order rs → Countable (IndiffQuot rs) →
-    ∃ f : α → ℝ, ordinal_consistent_strict f rs := by
-  intro h_weak_order h_countable
+    WeakOrder rs → Countable (IndiffQuot rs) →
+    ∃ f : α → ℝ, OrdinalConsistentStrict f rs := by
+  intro hwo hcountable
+  -- ===== Weights: enumerate the classes and give class y the weight (1/2)^(n y) =====
   -- Enumerate the quotient: each indifference class gets a distinct natural number
-  have h_enum : ∃ n : IndiffQuot rs → ℕ, Function.Injective n :=
+  have henum : ∃ n : IndiffQuot rs → ℕ, Function.Injective n :=
     Countable.exists_injective_nat (IndiffQuot rs)
-  rcases h_enum with ⟨n, hn⟩
+  rcases henum with ⟨n, hn⟩
   -- Weight of each class: w y = (1/2)^(n y)
   let w : IndiffQuot rs → ℝ := fun y ↦ (1 / 2 : ℝ) ^ n y
   -- Every weight is positive
-  have hw_pos : ∀ y : IndiffQuot rs, 0 < w y := by
-    intro y
-    exact pow_pos (by norm_num) (n y)
+  have hwpos : ∀ y : IndiffQuot rs, 0 < w y := fun y ↦ pow_pos (by norm_num) (n y)
   -- The weights are summable, since n is injective
-  have hw_sum : Summable w := summable_geometric_two.comp_injective hn
+  have hwsum : Summable w := summable_geometric_two.comp_injective hn
+  -- ===== Utility of a class: the total weight of the classes below it =====
   -- Utility of a class q: the total weight of the classes strictly below q
   -- u q = ∑ w y over all y strictly below q
   let uq : IndiffQuot rs → ℝ := fun q ↦
-    ∑' y : IndiffQuot rs, Set.indicator {y | q ≽[IndiffQuotRel rs h_weak_order] y} w y
+    ∑' y : IndiffQuot rs, Set.indicator {y | q ≽[IndiffQuotRel rs hwo] y} w y
+  -- ===== p ≻ q ⇒ uq p > uq q =====
   -- If p ≻ q then uq p > uq q: p has everything below q, plus q itself
-  have huq_gt : ∀ p q : IndiffQuot rs,
-      p ≽[IndiffQuotRel rs h_weak_order] q → uq p > uq q := by
-    intro p q hpq
+  have huqgt : ∀ p q : IndiffQuot rs,
+      p ≽[IndiffQuotRel rs hwo] q → uq p > uq q := by
+    intro p q hpsq
     -- Everything below q is below p, by transitivity
-    have hsub : ∀ y : IndiffQuot rs, y ∈ {y | q ≽[IndiffQuotRel rs h_weak_order] y} →
-        y ∈ {y | p ≽[IndiffQuotRel rs h_weak_order] y} :=
-      fun y hqy ↦ indiff_quot_rel_trans h_weak_order p q y hpq hqy
+    have hsub : ∀ y : IndiffQuot rs, y ∈ {y | q ≽[IndiffQuotRel rs hwo] y} →
+        y ∈ {y | p ≽[IndiffQuotRel rs hwo] y} :=
+      fun y hqsy ↦ indiffQuotRel_trans hwo p q y hpsq hqsy
     -- q itself is not below q, by asymmetry
-    have hqq : q ∉ {y | q ≽[IndiffQuotRel rs h_weak_order] y} := by
+    have hnqsq : q ∉ {y | q ≽[IndiffQuotRel rs hwo] y} := by
       refine Quot.induction_on q ?_
-      intro x hx
-      exact h_weak_order.left x x hx hx
+      intro x hxsx
+      exact hwo.left x x hxsx hxsx
     -- Termwise ≤, and strictly < at the term q
     refine Summable.tsum_lt_tsum (i := q) (fun y ↦ ?_) ?_
-      (hw_sum.indicator _) (hw_sum.indicator _)
-    · by_cases hy : y ∈ {y | q ≽[IndiffQuotRel rs h_weak_order] y}
-      · rw [Set.indicator_of_mem hy, Set.indicator_of_mem (hsub y hy)]
-      · rw [Set.indicator_of_notMem hy]
+      (hwsum.indicator _) (hwsum.indicator _)
+    · -- Termwise ≤
+      by_cases hy : y ∈ {y | q ≽[IndiffQuotRel rs hwo] y}
+      · -- y below q: the same weight on both sides
+        rw [Set.indicator_of_mem hy, Set.indicator_of_mem (hsub y hy)]
+      · -- y not below q: 0 on the left
+        rw [Set.indicator_of_notMem hy]
         unfold Set.indicator
         split_ifs
-        exacts [(hw_pos y).le, le_rfl]
-    · -- q is below p, so its weight counts for p but not for q
-      have hpq' : q ∈ {y | p ≽[IndiffQuotRel rs h_weak_order] y} := hpq
-      rw [Set.indicator_of_notMem hqq, Set.indicator_of_mem hpq']
-      exact hw_pos q
+        exacts [(hwpos y).le, le_rfl]
+    · -- Strictly < at the term q
+      -- q is below p, so its weight counts for p but not for q
+      have hpsq' : q ∈ {y | p ≽[IndiffQuotRel rs hwo] y} := hpsq
+      rw [Set.indicator_of_notMem hnqsq, Set.indicator_of_mem hpsq']
+      exact hwpos q
+  -- ===== ¬(p ≻ q) ⇒ uq p ≤ uq q =====
   -- If not p ≻ q then uq p ≤ uq q: everything below p is below q
-  have huq_le : ∀ p q : IndiffQuot rs,
-      ¬ (p ≽[IndiffQuotRel rs h_weak_order] q) → uq p ≤ uq q := by
-    intro p q hnpq
+  have huqle : ∀ p q : IndiffQuot rs,
+      ¬(p ≽[IndiffQuotRel rs hwo] q) → uq p ≤ uq q := by
+    intro p q hnpsq
     -- Everything below p is below q, by negative transitivity
-    have hsub : ∀ y : IndiffQuot rs, y ∈ {y | p ≽[IndiffQuotRel rs h_weak_order] y} →
-        y ∈ {y | q ≽[IndiffQuotRel rs h_weak_order] y} := by
-      intro y hpy
-      by_contra hnqy
-      revert hnpq hpy hnqy
+    have hsub : ∀ y : IndiffQuot rs, y ∈ {y | p ≽[IndiffQuotRel rs hwo] y} →
+        y ∈ {y | q ≽[IndiffQuotRel rs hwo] y} := by
+      intro y hpsy
+      by_contra hnqsy
+      revert hnpsq hpsy hnqsy
       refine Quot.induction_on₃ p q y ?_
-      intro a b c hnab hac hnbc
-      exact h_weak_order.right a b c ⟨hnab, hnbc⟩ hac
+      intro a b c hnasb hasc hnbsc
+      exact hwo.right a b c ⟨hnasb, hnbsc⟩ hasc
     -- So the sum for p is termwise ≤ the sum for q
-    refine Summable.tsum_le_tsum (fun y ↦ ?_) (hw_sum.indicator _) (hw_sum.indicator _)
-    by_cases hy : y ∈ {y | p ≽[IndiffQuotRel rs h_weak_order] y}
-    · rw [Set.indicator_of_mem hy, Set.indicator_of_mem (hsub y hy)]
-    · rw [Set.indicator_of_notMem hy]
+    refine Summable.tsum_le_tsum (fun y ↦ ?_) (hwsum.indicator _) (hwsum.indicator _)
+    by_cases hy : y ∈ {y | p ≽[IndiffQuotRel rs hwo] y}
+    · -- y below p: the same weight on both sides
+      rw [Set.indicator_of_mem hy, Set.indicator_of_mem (hsub y hy)]
+    · -- y not below p: 0 on the left
+      rw [Set.indicator_of_notMem hy]
       unfold Set.indicator
       split_ifs
-      exacts [(hw_pos y).le, le_rfl]
+      exacts [(hwpos y).le, le_rfl]
+  -- ===== Lift uq to α and conclude =====
   -- The representing function: the utility of an element is that of its class
   refine ⟨fun x ↦ uq (Quot.mk _ x), ?_⟩
   intro x y
   constructor
-  · -- Forward direction: x ≻ y → f x > f y
-    intro hxy
-    exact huq_gt (Quot.mk _ x) (Quot.mk _ y) hxy
-  · -- Backward direction: f x > f y → x ≻ y
-    intro hfxy
-    by_contra hnxy
-    exact not_le.mpr hfxy (huq_le (Quot.mk _ x) (Quot.mk _ y) hnxy)
+  · -- ===== Forward direction: x ≻ y → f x > f y =====
+    intro hxsy
+    exact huqgt (Quot.mk _ x) (Quot.mk _ y) hxsy
+  · -- ===== Backward direction: f x > f y → x ≻ y =====
+    intro hfxsy
+    by_contra hnxsy
+    exact not_le.mpr hfxsy (huqle (Quot.mk _ x) (Quot.mk _ y) hnxsy)
 
-/-
-Statment of Fishburn Theorem: A preference relation on a set satisfies
-being a weak order and order separability on the quotient induced, if and only if
-there exists a function f : Set → ℝ that strictly represents the preference relation.
-Proof from: Fishburn (1970) "Utility Theory for Decision Making" Theorem 3.1.
--/
-theorem Fishburn_theorem (rs : Relation α) :
-  (∃ h : weak_order rs, order_separable (IndiffQuotRel rs h))
-  ↔ ∃ f : α → ℝ, ordinal_consistent_strict f rs := by
-  apply Iff.intro
-  · -- Forward direction: weak order ∧ order_separable → ∃ function
-    intro h_exists
-    rcases h_exists with ⟨h_weak_order, h_order_separable⟩
+/-! ### Proof -/
 
-    -- Define the quotient set
-    let QuotSet := {q : IndiffQuot rs | True}
-    let rq := IndiffQuotRel rs h_weak_order
+/-! #### Forward direction -/
 
-    -- Extract the order dense set from the order separable property
-    rcases h_order_separable with ⟨D, h_countable, h_order_dense⟩
+/-- Fishburn's theorem, forward direction (≻ weak order ∧ X/∼ order separable ⇒
+∃ f : X → ℝ with x ≻ y ⇔ f(x) > f(y)):
+`OrderSeparable (IndiffQuotRel rs hwo) → ∃ f : α → ℝ, OrdinalConsistentStrict f rs`. -/
+lemma exists_ordinalConsistentStrict_of_orderSeparable {rs : Relation α}
+    (hwo : WeakOrder rs) :
+    OrderSeparable (IndiffQuotRel rs hwo) →
+    ∃ f : α → ℝ, OrdinalConsistentStrict f rs := by
+  intro hsep
+  -- ===== Define A = D ∪ {extreme elements} and show it is countable and order dense =====
+  let rq := IndiffQuotRel rs hwo
+  -- Extract the order dense set from the order separable property
+  rcases hsep with ⟨D, hcountable, hdense⟩
+  -- Define the set A as the order dense set D with the least and
+  -- greatest elements included
+  let A := D ∪ {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬(p ≽[rq] q)}
+    ∪ {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬(q ≽[rq] p)}
+  -- Show A is countable
+  have hcountableA : Countable A := by
+    -- D is countable
+    have hD : D.Countable := Set.countable_coe_iff.mp hcountable
+    -- There is at most one greatest element: two greatest elements are
+    -- indifferent, hence equal in the quotient
+    have hmax : {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬(p ≽[rq] q)}.Subsingleton := by
+      intro q₁ hq₁ q₂ hq₂
+      revert hq₁ hq₂
+      refine Quot.induction_on₂ q₁ q₂ ?_
+      intro x y hx hy
+      exact Quot.sound ⟨hy (Quot.mk _ x), hx (Quot.mk _ y)⟩
+    -- Likewise, there is at most one least element
+    have hmin : {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬(q ≽[rq] p)}.Subsingleton := by
+      intro q₁ hq₁ q₂ hq₂
+      revert hq₁ hq₂
+      refine Quot.induction_on₂ q₁ q₂ ?_
+      intro x y hx hy
+      exact Quot.sound ⟨hx (Quot.mk _ y), hy (Quot.mk _ x)⟩
+    -- A is a union of three countable sets
+    exact Set.countable_coe_iff.mpr ((hD.union hmax.countable).union hmin.countable)
+  -- Show A is order dense in the quotient set
+  have hdenseA : OrderDense A rq := by
+    intro x y h
+    rcases h with ⟨hxsy, hnxA, hnyA⟩
+    -- x and y are not in D either, since D ⊆ A
+    have hnxD : x ∉ D := fun hx ↦ hnxA (Or.inl (Or.inl hx))
+    have hnyD : y ∉ D := fun hy ↦ hnyA (Or.inl (Or.inl hy))
+    -- So D gives an element z strictly between x and y, and z ∈ D ⊆ A
+    rcases hdense x y ⟨hxsy, hnxD, hnyD⟩ with ⟨z, hzD, hxsz, hzsy⟩
+    exact ⟨z, Or.inl (Or.inl hzD), hxsz, hzsy⟩
+  -- ===== Define B, the elements outside A next to a gap of A, and show it is countable =====
+  -- Define above S b as the set of elements in S bigger than b
+  let above (S : Set (IndiffQuot rs)) (b : IndiffQuot rs) : Set (IndiffQuot rs) :=
+    {q : IndiffQuot rs | q ∈ S ∧ q ≽[rq] b}
+  -- Define below S b as the set of elements in S smaller than b
+  let below (S : Set (IndiffQuot rs)) (b : IndiffQuot rs) : Set (IndiffQuot rs) :=
+    {q : IndiffQuot rs | q ∈ S ∧ b ≽[rq] q}
+  -- a is a least element of above S b
+  let leastAbove (S : Set (IndiffQuot rs)) (b a : IndiffQuot rs) : Prop :=
+    a ∈ above S b ∧ ∀ a' ∈ above S b, ¬(a ≽[rq] a')
+  -- c is a greatest element of below S b
+  let greatestBelow (S : Set (IndiffQuot rs)) (b c : IndiffQuot rs) : Prop :=
+    c ∈ below S b ∧ ∀ c' ∈ below S b, ¬(c' ≽[rq] c)
+  -- Define B as the elements outside A such that above A b has a least element
+  -- or below A b has a greatest element
+  let B : Set (IndiffQuot rs) :=
+    {b : IndiffQuot rs | b ∉ A ∧ ((∃ a, leastAbove A b a) ∨ (∃ c, greatestBelow A b c))}
+  -- A given a can be the least element of above A b for at most one b ∉ A
+  have hleastAboveUniq : ∀ a : IndiffQuot rs,
+      {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}.Subsingleton := by
+    intro a b₁ hb₁ b₂ hb₂
+    rcases hb₁ with ⟨hnb₁A, ha₁, hmin₁⟩
+    rcases hb₂ with ⟨hnb₂A, ha₂, hmin₂⟩
+    by_contra hb₁neb₂
+    rcases indiffQuotRel_total hwo b₁ b₂ hb₁neb₂ with hb₁sb₂ | hb₂sb₁
+    · -- b₁ ≻ b₂: some z ∈ A lies strictly between, so z ∈ above A b₂ and a ≻ z
+      rcases hdenseA b₁ b₂ ⟨hb₁sb₂, hnb₁A, hnb₂A⟩ with ⟨z, hzA, hb₁sz, hzsb₂⟩
+      exact hmin₂ z ⟨hzA, hzsb₂⟩ (indiffQuotRel_trans hwo a b₁ z ha₁.2 hb₁sz)
+    · -- b₂ ≻ b₁: symmetric
+      rcases hdenseA b₂ b₁ ⟨hb₂sb₁, hnb₂A, hnb₁A⟩ with ⟨z, hzA, hb₂sz, hzsb₁⟩
+      exact hmin₁ z ⟨hzA, hzsb₁⟩ (indiffQuotRel_trans hwo a b₂ z ha₂.2 hb₂sz)
+  -- A given c can be the greatest element of below A b for at most one b ∉ A
+  have hgreatestBelowUniq : ∀ c : IndiffQuot rs,
+      {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}.Subsingleton := by
+    intro c b₁ hb₁ b₂ hb₂
+    rcases hb₁ with ⟨hnb₁A, hc₁, hmax₁⟩
+    rcases hb₂ with ⟨hnb₂A, hc₂, hmax₂⟩
+    by_contra hb₁neb₂
+    rcases indiffQuotRel_total hwo b₁ b₂ hb₁neb₂ with hb₁sb₂ | hb₂sb₁
+    · -- b₁ ≻ b₂: some z ∈ A lies strictly between, so z ∈ below A b₁ and z ≻ c
+      rcases hdenseA b₁ b₂ ⟨hb₁sb₂, hnb₁A, hnb₂A⟩ with ⟨z, hzA, hb₁sz, hzsb₂⟩
+      exact hmax₁ z ⟨hzA, hb₁sz⟩ (indiffQuotRel_trans hwo z b₂ c hzsb₂ hc₂.2)
+    · -- b₂ ≻ b₁: symmetric
+      rcases hdenseA b₂ b₁ ⟨hb₂sb₁, hnb₂A, hnb₁A⟩ with ⟨z, hzA, hb₂sz, hzsb₁⟩
+      exact hmax₂ z ⟨hzA, hb₂sz⟩ (indiffQuotRel_trans hwo z b₁ c hzsb₁ hc₁.2)
+  -- B is countable: each part injects into the countable set A
+  have hcountableB : Countable B := by
+    have hA : A.Countable := Set.countable_coe_iff.mp hcountableA
+    -- b's whose above A b has a least element: at most one b for each a ∈ A
+    have hB₁ : (⋃ a ∈ A, {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}).Countable :=
+      hA.biUnion fun a _ ↦ (hleastAboveUniq a).countable
+    -- b's whose below A b has a greatest element: at most one b for each c ∈ A
+    have hB₂ : (⋃ c ∈ A, {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}).Countable :=
+      hA.biUnion fun c _ ↦ (hgreatestBelowUniq c).countable
+    -- B is contained in the union of both
+    have hBsub : B ⊆ (⋃ a ∈ A, {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}) ∪
+        (⋃ c ∈ A, {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}) := by
+      intro b hb
+      rcases hb with ⟨hnbA, ⟨a, ha⟩ | ⟨c, hc⟩⟩
+      · -- above A b has least element a ∈ A
+        exact Or.inl (Set.mem_biUnion ha.1.1 ⟨hnbA, ha⟩)
+      · -- below A b has greatest element c ∈ A
+        exact Or.inr (Set.mem_biUnion hc.1.1 ⟨hnbA, hc⟩)
+    exact Set.countable_coe_iff.mpr ((hB₁.union hB₂).mono hBsub)
+  -- ===== C = A ∪ B is countable and has no gaps next to the elements outside it =====
+  -- Define C as A ∪ B, which is countable as a union of countable sets
+  let C : Set (IndiffQuot rs) := A ∪ B
+  have hcountableC : Countable C :=
+    Set.countable_coe_iff.mpr ((Set.countable_coe_iff.mp hcountableA).union
+      (Set.countable_coe_iff.mp hcountableB))
+  -- (1) For b ∉ C, above C b has no least element
+  have hnoLeastAbove : ∀ b : IndiffQuot rs, b ∉ C → ¬∃ a, leastAbove C b a := by
+    intro b hnbC hex
+    rcases hex with ⟨a, ⟨haC, hasb⟩, hmin⟩
+    -- b ∉ A, since A ⊆ C
+    have hnbA : b ∉ A := fun hb ↦ hnbC (Or.inl hb)
+    -- a ∉ A: otherwise a is also least in above A b, so b ∈ B ⊆ C
+    have hnaA : a ∉ A := by
+      intro haA
+      apply hnbC
+      exact Or.inr ⟨hnbA, Or.inl ⟨a, ⟨haA, hasb⟩, fun a' ha' ↦ hmin a' ⟨Or.inl ha'.1, ha'.2⟩⟩⟩
+    -- By order denseness, some z ∈ A ⊆ C lies strictly between a and b,
+    -- so z ∈ above C b and a ≻ z, contradicting that a is least
+    rcases hdenseA a b ⟨hasb, hnaA, hnbA⟩ with ⟨z, hzA, hasz, hzsb⟩
+    exact hmin z ⟨Or.inl hzA, hzsb⟩ hasz
+  -- (2) For b ∉ C, below C b has no greatest element
+  have hnoGreatestBelow : ∀ b : IndiffQuot rs, b ∉ C → ¬∃ c, greatestBelow C b c := by
+    intro b hnbC hex
+    rcases hex with ⟨c, ⟨hcC, hbsc⟩, hmax⟩
+    -- b ∉ A, since A ⊆ C
+    have hnbA : b ∉ A := fun hb ↦ hnbC (Or.inl hb)
+    -- c ∉ A: otherwise c is also greatest in below A b, so b ∈ B ⊆ C
+    have hncA : c ∉ A := by
+      intro hcA
+      apply hnbC
+      exact Or.inr ⟨hnbA, Or.inr ⟨c, ⟨hcA, hbsc⟩, fun c' hc' ↦ hmax c' ⟨Or.inl hc'.1, hc'.2⟩⟩⟩
+    -- By order denseness, some z ∈ A ⊆ C lies strictly between b and c,
+    -- so z ∈ below C b and z ≻ c, contradicting that c is greatest
+    rcases hdenseA b c ⟨hbsc, hnbA, hncA⟩ with ⟨z, hzA, hbsz, hzsc⟩
+    exact hmax z ⟨Or.inl hzA, hbsz⟩ hzsc
+  -- ===== By Theorem 2.2, represent ≻ on C by a function uC =====
+  -- The preference restricted to C
+  let rC : Relation C := fun a c ↦ a.1 ≽[rq] c.1
+  -- rC is a weak order, since rq is
+  have hwoC : WeakOrder rC := by
+    have hwoq := indiffQuotRel_weakOrder hwo
+    exact ⟨fun a c ↦ hwoq.left a.1 c.1, fun a b c ↦ hwoq.right a.1 b.1 c.1⟩
+  -- The quotient of C is countable, since C is
+  have hcountableQuotC : Countable (IndiffQuot rC) := by
+    have : Countable C := hcountableC
+    unfold IndiffQuot
+    infer_instance
+  -- By Theorem 2.2, there is a utility uC on C representing rC
+  rcases countable_representation_theorem rC hwoC hcountableQuotC with ⟨uC, huC⟩
+  -- ===== u_b and u^b: the values of uC below and above b =====
+  -- u_b: the values of uC on the elements of C below b
+  let uBelow (b : IndiffQuot rs) : Set ℝ := {r : ℝ | ∃ c : C, b ≽[rq] c.1 ∧ uC c = r}
+  -- u^b: the values of uC on the elements of C above b
+  let uAbove (b : IndiffQuot rs) : Set ℝ := {r : ℝ | ∃ a : C, a.1 ≽[rq] b ∧ uC a = r}
+  -- For b ∉ C, both sets are nonempty
+  have huBelowNonempty : ∀ b : IndiffQuot rs, b ∉ C → (uBelow b).Nonempty := by
+    intro b hnbC
+    have hnbA : b ∉ A := fun hb ↦ hnbC (Or.inl hb)
+    -- b is not a least element, since those are in A; so some p is below b
+    have hnmin : ¬∀ p : IndiffQuot rs, ¬(b ≽[rq] p) := fun h ↦ hnbA (Or.inr h)
+    rcases not_forall.mp hnmin with ⟨p, hnnbsp⟩
+    have hbsp : b ≽[rq] p := not_not.mp hnnbsp
+    by_cases hpC : p ∈ C
+    · -- p itself is in C
+      exact ⟨uC ⟨p, hpC⟩, ⟨p, hpC⟩, hbsp, rfl⟩
+    · -- Otherwise, by order denseness some z ∈ A ⊆ C lies between b and p
+      have hnpA : p ∉ A := fun h ↦ hpC (Or.inl h)
+      rcases hdenseA b p ⟨hbsp, hnbA, hnpA⟩ with ⟨z, hzA, hbsz, _⟩
+      exact ⟨uC ⟨z, Or.inl hzA⟩, ⟨z, Or.inl hzA⟩, hbsz, rfl⟩
+  have huAboveNonempty : ∀ b : IndiffQuot rs, b ∉ C → (uAbove b).Nonempty := by
+    intro b hnbC
+    have hnbA : b ∉ A := fun hb ↦ hnbC (Or.inl hb)
+    -- b is not a greatest element, since those are in A; so some p is above b
+    have hnmax : ¬∀ p : IndiffQuot rs, ¬(p ≽[rq] b) := fun h ↦ hnbA (Or.inl (Or.inr h))
+    rcases not_forall.mp hnmax with ⟨p, hnnpsb⟩
+    have hpsb : p ≽[rq] b := not_not.mp hnnpsb
+    by_cases hpC : p ∈ C
+    · -- p itself is in C
+      exact ⟨uC ⟨p, hpC⟩, ⟨p, hpC⟩, hpsb, rfl⟩
+    · -- Otherwise, by order denseness some z ∈ A ⊆ C lies between p and b
+      have hnpA : p ∉ A := fun h ↦ hpC (Or.inl h)
+      rcases hdenseA p b ⟨hpsb, hnpA, hnbA⟩ with ⟨z, hzA, _, hzsb⟩
+      exact ⟨uC ⟨z, Or.inl hzA⟩, ⟨z, Or.inl hzA⟩, hzsb, rfl⟩
+  -- Every value in u_b is smaller than every value in u^b
+  have huBelowLtAbove : ∀ b : IndiffQuot rs, ∀ r ∈ uBelow b, ∀ s ∈ uAbove b, r < s := by
+    intro b r hr s hs
+    rcases hr with ⟨c, hbsc, hcr⟩
+    rcases hs with ⟨a, hasb, has⟩
+    -- a ≻ b ≻ c, so a ≻ c, and hence uC a > uC c
+    have hasc : rC a c := indiffQuotRel_trans hwo a.1 b c.1 hasb hbsc
+    rw [← hcr, ← has]
+    exact (huC a c).mp hasc
+  -- ===== (3.2): extend uC to the whole quotient =====
+  -- Membership in C is decided classically
+  classical
+  let u (q : IndiffQuot rs) : ℝ :=
+    if h : q ∈ C then uC ⟨q, h⟩ else (sSup (uBelow q) + sInf (uAbove q)) / 2
+  -- From (2): every value in u_b is strictly below sup u_b
+  have hltsSup : ∀ b : IndiffQuot rs, b ∉ C → ∀ r ∈ uBelow b, r < sSup (uBelow b) := by
+    intro b hnbC r hr
+    rcases hr with ⟨c, hbsc, hcr⟩
+    -- u_b is bounded above by any value in u^b
+    rcases huAboveNonempty b hnbC with ⟨s, hs⟩
+    have hbdd : BddAbove (uBelow b) :=
+      ⟨s, fun r' hr' ↦ (huBelowLtAbove b r' hr' s hs).le⟩
+    -- By (2), c is not greatest in below C b: some c' ∈ below C b has c' ≻ c
+    have hc' : ∃ c' ∈ below C b, c' ≽[rq] c.1 := by
+      by_contra hn
+      exact hnoGreatestBelow b hnbC ⟨c.1, ⟨c.2, hbsc⟩, fun c' hc' hc'sc ↦ hn ⟨c', hc', hc'sc⟩⟩
+    rcases hc' with ⟨c', hc'b, hc'sc⟩
+    rcases hc'b with ⟨hc'C, hbsc'⟩
+    -- So uC c < uC c' ≤ sup u_b
+    have hlt : uC c < uC ⟨c', hc'C⟩ := (huC ⟨c', hc'C⟩ c).mp hc'sc
+    have hle : uC ⟨c', hc'C⟩ ≤ sSup (uBelow b) := le_csSup hbdd ⟨⟨c', hc'C⟩, hbsc', rfl⟩
+    rw [← hcr]
+    exact lt_of_lt_of_le hlt hle
+  -- From (1): every value in u^b is strictly above inf u^b
+  have hsInflt : ∀ b : IndiffQuot rs, b ∉ C → ∀ s ∈ uAbove b, sInf (uAbove b) < s := by
+    intro b hnbC s hs
+    rcases hs with ⟨a, hasb, has⟩
+    -- u^b is bounded below by any value in u_b
+    rcases huBelowNonempty b hnbC with ⟨r, hr⟩
+    have hbdd : BddBelow (uAbove b) :=
+      ⟨r, fun s' hs' ↦ (huBelowLtAbove b r hr s' hs').le⟩
+    -- By (1), a is not least in above C b: some a' ∈ above C b has a ≻ a'
+    have ha' : ∃ a' ∈ above C b, a.1 ≽[rq] a' := by
+      by_contra hn
+      exact hnoLeastAbove b hnbC ⟨a.1, ⟨a.2, hasb⟩, fun a' ha' hasa' ↦ hn ⟨a', ha', hasa'⟩⟩
+    rcases ha' with ⟨a', ha'b, hasa'⟩
+    rcases ha'b with ⟨ha'C, ha'sb⟩
+    -- So inf u^b ≤ uC a' < uC a
+    have hlt : uC ⟨a', ha'C⟩ < uC a := (huC a ⟨a', ha'C⟩).mp hasa'
+    have hle : sInf (uAbove b) ≤ uC ⟨a', ha'C⟩ := csInf_le hbdd ⟨⟨a', ha'C⟩, ha'sb, rfl⟩
+    rw [← has]
+    exact lt_of_le_of_lt hle hlt
+  -- ===== u represents ≻ on the quotient =====
+  -- On C, u agrees with uC
+  have huOnC : ∀ q : IndiffQuot rs, ∀ hq : q ∈ C, u q = uC ⟨q, hq⟩ :=
+    fun q hq ↦ dif_pos hq
+  -- For b ∉ C: u(c) < u(b) < u(a) for all values u(c) ∈ u_b and u(a) ∈ u^b
+  have hubetween : ∀ b : IndiffQuot rs, b ∉ C →
+      (∀ r ∈ uBelow b, r < u b) ∧ (∀ s ∈ uAbove b, u b < s) := by
+    intro b hnbC
+    have hu : u b = (sSup (uBelow b) + sInf (uAbove b)) / 2 := dif_neg hnbC
+    -- sup u_b ≤ inf u^b, since every value below is smaller than every value above
+    have hsuple : sSup (uBelow b) ≤ sInf (uAbove b) :=
+      csSup_le (huBelowNonempty b hnbC) (fun r hr ↦
+        le_csInf (huAboveNonempty b hnbC) (fun s hs ↦ (huBelowLtAbove b r hr s hs).le))
+    constructor
+    · -- r < sup u_b ≤ u b
+      intro r hr
+      have hrlt := hltsSup b hnbC r hr
+      rw [hu]
+      linarith
+    · -- u b ≤ inf u^b < s
+      intro s hs
+      have hsgt := hsInflt b hnbC s hs
+      rw [hu]
+      linarith
+  -- u preserves the strict order: p ≻ q → u p > u q
+  have hugt : ∀ p q : IndiffQuot rs, p ≽[rq] q → u p > u q := by
+    intro p q hpsq
+    by_cases hpC : p ∈ C <;> by_cases hqC : q ∈ C
+    · -- p, q ∈ C: u is uC, which represents rC
+      rw [huOnC p hpC, huOnC q hqC]
+      exact (huC ⟨p, hpC⟩ ⟨q, hqC⟩).mp hpsq
+    · -- p ∈ C, q ∉ C: u p is a value in u^q
+      rw [huOnC p hpC]
+      exact (hubetween q hqC).2 _ ⟨⟨p, hpC⟩, hpsq, rfl⟩
+    · -- p ∉ C, q ∈ C: u q is a value in u_p
+      rw [huOnC q hqC]
+      exact (hubetween p hpC).1 _ ⟨⟨q, hqC⟩, hpsq, rfl⟩
+    · -- p, q ∉ C
+      -- By order denseness some z ∈ A ⊆ C lies between, so u q < u z < u p
+      have hnpA : p ∉ A := fun h ↦ hpC (Or.inl h)
+      have hnqA : q ∉ A := fun h ↦ hqC (Or.inl h)
+      rcases hdenseA p q ⟨hpsq, hnpA, hnqA⟩ with ⟨z, hzA, hpsz, hzsq⟩
+      have huzsq := (hubetween q hqC).2 _ ⟨⟨z, Or.inl hzA⟩, hzsq, rfl⟩
+      have hupsz := (hubetween p hpC).1 _ ⟨⟨z, Or.inl hzA⟩, hpsz, rfl⟩
+      exact lt_trans huzsq hupsz
+  -- u represents the order on the quotient
+  have hurep : ∀ p q : IndiffQuot rs, p ≽[rq] q ↔ u p > u q := by
+    intro p q
+    constructor
+    · -- Forward direction: p ≻ q → u p > u q
+      exact hugt p q
+    · -- Backward direction: u p > u q → p ≻ q, by totality
+      intro hupsq
+      by_contra hnpsq
+      by_cases hpeq : p = q
+      · -- p = q: contradicts irreflexivity of <
+        rw [hpeq] at hupsq
+        exact lt_irrefl _ hupsq
+      · -- p ≠ q: p ≻ q or q ≻ p
+        rcases indiffQuotRel_total hwo p q hpeq with hpsq | hqsp
+        · -- p ≻ q
+          exact hnpsq hpsq
+        · -- q ≻ p
+          exact lt_asymm hupsq (hugt q p hqsp)
+  -- ===== (3.1): lift u to α =====
+  exact ⟨fun x ↦ u (Quot.mk _ x), fun x y ↦ hurep (Quot.mk _ x) (Quot.mk _ y)⟩
 
-    -- Define the set A as the order dense set D with the least and
-    -- greatest elements included
-    let A := D ∪ {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬ (p ≽[rq] q)}
-      ∪ {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬ (q ≽[rq] p)}
+/-! #### Backward direction -/
 
-    -- Show A is countable
-    have h_countable_A : Countable A := by
-      -- D is countable
-      have hD : D.Countable := Set.countable_coe_iff.mp h_countable
-      -- There is at most one greatest element: two greatest elements are
-      -- indifferent, hence equal in the quotient
-      have hmax : {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬ (p ≽[rq] q)}.Subsingleton := by
-        intro q₁ hq₁ q₂ hq₂
-        revert hq₁ hq₂
-        refine Quot.induction_on₂ q₁ q₂ ?_
-        intro x y hx hy
-        exact Quot.sound ⟨hy (Quot.mk _ x), hx (Quot.mk _ y)⟩
-      -- Likewise, there is at most one least element
-      have hmin : {q : IndiffQuot rs | ∀ p : IndiffQuot rs, ¬ (q ≽[rq] p)}.Subsingleton := by
-        intro q₁ hq₁ q₂ hq₂
-        revert hq₁ hq₂
-        refine Quot.induction_on₂ q₁ q₂ ?_
-        intro x y hx hy
-        exact Quot.sound ⟨hx (Quot.mk _ y), hy (Quot.mk _ x)⟩
-      -- A is a union of three countable sets
-      exact Set.countable_coe_iff.mpr ((hD.union hmax.countable).union hmin.countable)
+/-- Fishburn's theorem, backward direction, weak order part
+(f strictly consistent with ≻ ⇒ ≻ weak order):
+`OrdinalConsistentStrict f rs → WeakOrder rs`. -/
+lemma weakOrder_of_ordinalConsistentStrict {rs : Relation α} {f : α → ℝ} :
+    OrdinalConsistentStrict f rs → WeakOrder rs := by
+  intro hocs
+  -- ===== rs is asymmetric =====
+  have hasym : Asymmetry rs := by
+    intro x y hxsy hysx
+    have hfxsy := (hocs x y).mp hxsy
+    have hfysx := (hocs y x).mp hysx
+    exact not_le.mpr hfysx (le_of_lt hfxsy)
+  -- ===== rs is negatively transitive =====
+  have hnegtrans : NegativeTransitivity rs := by
+    intro x y z hn
+    rcases hn with ⟨hnxsy, hnysz⟩
+    have hnfxsy : ¬(f x > f y) := by
+      intro hfxsy
+      exact hnxsy ((hocs x y).mpr hfxsy)
+    have hnfysz : ¬(f y > f z) := by
+      intro hfysz
+      exact hnysz ((hocs y z).mpr hfysz)
+    have hnfxsz : ¬(f x > f z) := by
+      intro hfxsz
+      have hfzy := le_of_not_gt hnfysz
+      have hfyx := le_of_not_gt hnfxsy
+      exact not_lt.mpr (le_trans hfyx hfzy) hfxsz
+    intro hxsz
+    exact hnfxsz ((hocs x z).mp hxsz)
+  exact ⟨hasym, hnegtrans⟩
 
-    -- Show A is order dense in the quotient set
-    have h_order_dense_A : order_dense A rq := by
-      intro x y hxy
-      rcases hxy with ⟨hxy, hxA, hyA⟩
-      -- x and y are not in D either, since D ⊆ A
-      have hxD : x ∉ D := fun hx ↦ hxA (Or.inl (Or.inl hx))
-      have hyD : y ∉ D := fun hy ↦ hyA (Or.inl (Or.inl hy))
-      -- So D gives an element z strictly between x and y, and z ∈ D ⊆ A
-      rcases h_order_dense x y ⟨hxy, hxD, hyD⟩ with ⟨z, hzD, hxz, hzy⟩
-      exact ⟨z, Or.inl (Or.inl hzD), hxz, hzy⟩
-
-    -- Define above S b as the set of elements in S bigger than b
-    let above (S : Set (IndiffQuot rs)) (b : IndiffQuot rs) : Set (IndiffQuot rs) :=
-      {q : IndiffQuot rs | q ∈ S ∧ q ≽[rq] b}
-    -- Define below S b as the set of elements in S smaller than b
-    let below (S : Set (IndiffQuot rs)) (b : IndiffQuot rs) : Set (IndiffQuot rs) :=
-      {q : IndiffQuot rs | q ∈ S ∧ b ≽[rq] q}
-
-    -- a is a least element of above S b
-    let leastAbove (S : Set (IndiffQuot rs)) (b a : IndiffQuot rs) : Prop :=
-      a ∈ above S b ∧ ∀ a' ∈ above S b, ¬ (a ≽[rq] a')
-    -- c is a greatest element of below S b
-    let greatestBelow (S : Set (IndiffQuot rs)) (b c : IndiffQuot rs) : Prop :=
-      c ∈ below S b ∧ ∀ c' ∈ below S b, ¬ (c' ≽[rq] c)
-
-    -- Define B as the elements outside A such that above A b has a least element
-    -- or below A b has a greatest element
-    let B : Set (IndiffQuot rs) :=
-      {b : IndiffQuot rs | b ∉ A ∧ ((∃ a, leastAbove A b a) ∨ (∃ c, greatestBelow A b c))}
-
-    -- A given a can be the least element of above A b for at most one b ∉ A
-    have h_leastAbove_unique : ∀ a : IndiffQuot rs,
-        {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}.Subsingleton := by
-      intro a b₁ hb₁ b₂ hb₂
-      rcases hb₁ with ⟨hb₁A, ha₁, hmin₁⟩
-      rcases hb₂ with ⟨hb₂A, ha₂, hmin₂⟩
-      by_contra hne
-      rcases indiff_quot_rel_total h_weak_order b₁ b₂ hne with h12 | h21
-      · -- b₁ ≻ b₂: some z ∈ A lies strictly between, so z ∈ above A b₂ and a ≻ z
-        rcases h_order_dense_A b₁ b₂ ⟨h12, hb₁A, hb₂A⟩ with ⟨z, hzA, h1z, hz2⟩
-        exact hmin₂ z ⟨hzA, hz2⟩ (indiff_quot_rel_trans h_weak_order a b₁ z ha₁.2 h1z)
-      · -- b₂ ≻ b₁: symmetric
-        rcases h_order_dense_A b₂ b₁ ⟨h21, hb₂A, hb₁A⟩ with ⟨z, hzA, h2z, hz1⟩
-        exact hmin₁ z ⟨hzA, hz1⟩ (indiff_quot_rel_trans h_weak_order a b₂ z ha₂.2 h2z)
-
-    -- A given c can be the greatest element of below A b for at most one b ∉ A
-    have h_greatestBelow_unique : ∀ c : IndiffQuot rs,
-        {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}.Subsingleton := by
-      intro c b₁ hb₁ b₂ hb₂
-      rcases hb₁ with ⟨hb₁A, hc₁, hmax₁⟩
-      rcases hb₂ with ⟨hb₂A, hc₂, hmax₂⟩
-      by_contra hne
-      rcases indiff_quot_rel_total h_weak_order b₁ b₂ hne with h12 | h21
-      · -- b₁ ≻ b₂: some z ∈ A lies strictly between, so z ∈ below A b₁ and z ≻ c
-        rcases h_order_dense_A b₁ b₂ ⟨h12, hb₁A, hb₂A⟩ with ⟨z, hzA, h1z, hz2⟩
-        exact hmax₁ z ⟨hzA, h1z⟩ (indiff_quot_rel_trans h_weak_order z b₂ c hz2 hc₂.2)
-      · -- b₂ ≻ b₁: symmetric
-        rcases h_order_dense_A b₂ b₁ ⟨h21, hb₂A, hb₁A⟩ with ⟨z, hzA, h2z, hz1⟩
-        exact hmax₂ z ⟨hzA, h2z⟩ (indiff_quot_rel_trans h_weak_order z b₁ c hz1 hc₁.2)
-
-    -- B is countable: each part injects into the countable set A
-    have h_countable_B : Countable B := by
-      have hA : A.Countable := Set.countable_coe_iff.mp h_countable_A
-      -- b's whose above A b has a least element: at most one b for each a ∈ A
-      have hB₁ : (⋃ a ∈ A, {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}).Countable :=
-        hA.biUnion fun a _ ↦ (h_leastAbove_unique a).countable
-      -- b's whose below A b has a greatest element: at most one b for each c ∈ A
-      have hB₂ : (⋃ c ∈ A, {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}).Countable :=
-        hA.biUnion fun c _ ↦ (h_greatestBelow_unique c).countable
-      -- B is contained in the union of both
-      have hB_sub : B ⊆ (⋃ a ∈ A, {b : IndiffQuot rs | b ∉ A ∧ leastAbove A b a}) ∪
-          (⋃ c ∈ A, {b : IndiffQuot rs | b ∉ A ∧ greatestBelow A b c}) := by
-        intro b hb
-        rcases hb with ⟨hbA, ⟨a, ha⟩ | ⟨c, hc⟩⟩
-        · -- above A b has least element a ∈ A
-          exact Or.inl (Set.mem_biUnion ha.1.1 ⟨hbA, ha⟩)
-        · -- below A b has greatest element c ∈ A
-          exact Or.inr (Set.mem_biUnion hc.1.1 ⟨hbA, hc⟩)
-      exact Set.countable_coe_iff.mpr ((hB₁.union hB₂).mono hB_sub)
-
-    -- Define C as A ∪ B, which is countable as a union of countable sets
-    let C : Set (IndiffQuot rs) := A ∪ B
-    have h_countable_C : Countable C :=
-      Set.countable_coe_iff.mpr ((Set.countable_coe_iff.mp h_countable_A).union
-        (Set.countable_coe_iff.mp h_countable_B))
-
-    -- (1) For b ∉ C, above C b has no least element
-    have h_no_leastAbove : ∀ b : IndiffQuot rs, b ∉ C → ¬ ∃ a, leastAbove C b a := by
-      intro b hbC hex
-      rcases hex with ⟨a, ⟨haC, hab⟩, hmin⟩
-      -- b ∉ A, since A ⊆ C
-      have hbA : b ∉ A := fun hb ↦ hbC (Or.inl hb)
-      -- a ∉ A: otherwise a is also least in above A b, so b ∈ B ⊆ C
-      have haA : a ∉ A := by
-        intro haA
-        apply hbC
-        exact Or.inr ⟨hbA, Or.inl ⟨a, ⟨haA, hab⟩, fun a' ha' ↦ hmin a' ⟨Or.inl ha'.1, ha'.2⟩⟩⟩
-      -- By order denseness, some z ∈ A ⊆ C lies strictly between a and b,
-      -- so z ∈ above C b and a ≻ z, contradicting that a is least
-      rcases h_order_dense_A a b ⟨hab, haA, hbA⟩ with ⟨z, hzA, haz, hzb⟩
-      exact hmin z ⟨Or.inl hzA, hzb⟩ haz
-    -- (2) For b ∉ C, below C b has no greatest element
-    have h_no_greatestBelow : ∀ b : IndiffQuot rs, b ∉ C → ¬ ∃ c, greatestBelow C b c := by
-      intro b hbC hex
-      rcases hex with ⟨c, ⟨hcC, hbc⟩, hmax⟩
-      -- b ∉ A, since A ⊆ C
-      have hbA : b ∉ A := fun hb ↦ hbC (Or.inl hb)
-      -- c ∉ A: otherwise c is also greatest in below A b, so b ∈ B ⊆ C
-      have hcA : c ∉ A := by
-        intro hcA
-        apply hbC
-        exact Or.inr ⟨hbA, Or.inr ⟨c, ⟨hcA, hbc⟩, fun c' hc' ↦ hmax c' ⟨Or.inl hc'.1, hc'.2⟩⟩⟩
-      -- By order denseness, some z ∈ A ⊆ C lies strictly between b and c,
-      -- so z ∈ below C b and z ≻ c, contradicting that c is greatest
-      rcases h_order_dense_A b c ⟨hbc, hbA, hcA⟩ with ⟨z, hzA, hbz, hzc⟩
-      exact hmax z ⟨Or.inl hzA, hbz⟩ hzc
-
-    -- The preference restricted to C
-    let rC : Relation C := fun a c ↦ a.1 ≽[rq] c.1
-    -- rC is a weak order, since rq is
-    have h_weak_order_C : weak_order rC := by
-      have hq := indiff_quot_rel_weak_order h_weak_order
-      exact ⟨fun a c ↦ hq.left a.1 c.1, fun a b c ↦ hq.right a.1 b.1 c.1⟩
-    -- The quotient of C is countable, since C is
-    have h_countable_quot_C : Countable (IndiffQuot rC) := by
-      have : Countable C := h_countable_C
-      unfold IndiffQuot
-      infer_instance
-    -- By Theorem 2.2, there is a utility uC on C representing rC
-    rcases countable_representation_theorem rC h_weak_order_C h_countable_quot_C with ⟨uC, huC⟩
-
-    -- u_b: the values of uC on the elements of C below b
-    let uBelow (b : IndiffQuot rs) : Set ℝ := {r : ℝ | ∃ c : C, b ≽[rq] c.1 ∧ uC c = r}
-    -- u^b: the values of uC on the elements of C above b
-    let uAbove (b : IndiffQuot rs) : Set ℝ := {r : ℝ | ∃ a : C, a.1 ≽[rq] b ∧ uC a = r}
-    -- For b ∉ C, both sets are nonempty
-    have h_uBelow_nonempty : ∀ b : IndiffQuot rs, b ∉ C → (uBelow b).Nonempty := by
-      intro b hbC
-      have hbA : b ∉ A := fun hb ↦ hbC (Or.inl hb)
-      -- b is not a least element, since those are in A; so some p is below b
-      have hnmin : ¬ ∀ p : IndiffQuot rs, ¬ (b ≽[rq] p) := fun h ↦ hbA (Or.inr h)
-      rcases not_forall.mp hnmin with ⟨p, hp⟩
-      have hbp : b ≽[rq] p := not_not.mp hp
-      by_cases hpC : p ∈ C
-      · -- p itself is in C
-        exact ⟨uC ⟨p, hpC⟩, ⟨p, hpC⟩, hbp, rfl⟩
-      · -- Otherwise, by order denseness some z ∈ A ⊆ C lies between b and p
-        have hpA : p ∉ A := fun h ↦ hpC (Or.inl h)
-        rcases h_order_dense_A b p ⟨hbp, hbA, hpA⟩ with ⟨z, hzA, hbz, hzp⟩
-        exact ⟨uC ⟨z, Or.inl hzA⟩, ⟨z, Or.inl hzA⟩, hbz, rfl⟩
-    have h_uAbove_nonempty : ∀ b : IndiffQuot rs, b ∉ C → (uAbove b).Nonempty := by
-      intro b hbC
-      have hbA : b ∉ A := fun hb ↦ hbC (Or.inl hb)
-      -- b is not a greatest element, since those are in A; so some p is above b
-      have hnmax : ¬ ∀ p : IndiffQuot rs, ¬ (p ≽[rq] b) := fun h ↦ hbA (Or.inl (Or.inr h))
-      rcases not_forall.mp hnmax with ⟨p, hp⟩
-      have hpb : p ≽[rq] b := not_not.mp hp
-      by_cases hpC : p ∈ C
-      · -- p itself is in C
-        exact ⟨uC ⟨p, hpC⟩, ⟨p, hpC⟩, hpb, rfl⟩
-      · -- Otherwise, by order denseness some z ∈ A ⊆ C lies between p and b
-        have hpA : p ∉ A := fun h ↦ hpC (Or.inl h)
-        rcases h_order_dense_A p b ⟨hpb, hpA, hbA⟩ with ⟨z, hzA, hpz, hzb⟩
-        exact ⟨uC ⟨z, Or.inl hzA⟩, ⟨z, Or.inl hzA⟩, hzb, rfl⟩
-    -- Every value in u_b is smaller than every value in u^b
-    have h_uBelow_lt_uAbove : ∀ b : IndiffQuot rs, ∀ r ∈ uBelow b, ∀ s ∈ uAbove b, r < s := by
-      intro b r hr s hs
-      rcases hr with ⟨c, hbc, hcr⟩
-      rcases hs with ⟨a, hab, has⟩
-      -- a ≻ b ≻ c, so a ≻ c, and hence uC a > uC c
-      have hac : rC a c := indiff_quot_rel_trans h_weak_order a.1 b c.1 hab hbc
-      rw [← hcr, ← has]
-      exact (huC a c).mp hac
-    -- (3.2): extend uC to the whole quotient (membership in C is decided classically)
-    classical
-    let u (q : IndiffQuot rs) : ℝ :=
-      if h : q ∈ C then uC ⟨q, h⟩ else (sSup (uBelow q) + sInf (uAbove q)) / 2
-    -- From (2): every value in u_b is strictly below sup u_b
-    have h_lt_sSup : ∀ b : IndiffQuot rs, b ∉ C → ∀ r ∈ uBelow b, r < sSup (uBelow b) := by
-      intro b hbC r hr
-      rcases hr with ⟨c, hbc, hcr⟩
-      -- u_b is bounded above by any value in u^b
-      rcases h_uAbove_nonempty b hbC with ⟨s, hs⟩
-      have hbdd : BddAbove (uBelow b) :=
-        ⟨s, fun r' hr' ↦ (h_uBelow_lt_uAbove b r' hr' s hs).le⟩
-      -- By (2), c is not greatest in below C b: some c' ∈ below C b has c' ≻ c
-      have hc' : ∃ c' ∈ below C b, c' ≽[rq] c.1 := by
-        by_contra hn
-        exact h_no_greatestBelow b hbC ⟨c.1, ⟨c.2, hbc⟩, fun c' hc' hcc ↦ hn ⟨c', hc', hcc⟩⟩
-      rcases hc' with ⟨c', hc'b, hc'c⟩
-      rcases hc'b with ⟨hc'C, hbc'⟩
-      -- So uC c < uC c' ≤ sup u_b
-      have hlt : uC c < uC ⟨c', hc'C⟩ := (huC ⟨c', hc'C⟩ c).mp hc'c
-      have hle : uC ⟨c', hc'C⟩ ≤ sSup (uBelow b) := le_csSup hbdd ⟨⟨c', hc'C⟩, hbc', rfl⟩
-      rw [← hcr]
-      exact lt_of_lt_of_le hlt hle
-    -- From (1): every value in u^b is strictly above inf u^b
-    have h_sInf_lt : ∀ b : IndiffQuot rs, b ∉ C → ∀ s ∈ uAbove b, sInf (uAbove b) < s := by
-      intro b hbC s hs
-      rcases hs with ⟨a, hab, has⟩
-      -- u^b is bounded below by any value in u_b
-      rcases h_uBelow_nonempty b hbC with ⟨r, hr⟩
-      have hbdd : BddBelow (uAbove b) :=
-        ⟨r, fun s' hs' ↦ (h_uBelow_lt_uAbove b r hr s' hs').le⟩
-      -- By (1), a is not least in above C b: some a' ∈ above C b has a ≻ a'
-      have ha' : ∃ a' ∈ above C b, a.1 ≽[rq] a' := by
-        by_contra hn
-        exact h_no_leastAbove b hbC ⟨a.1, ⟨a.2, hab⟩, fun a' ha' haa ↦ hn ⟨a', ha', haa⟩⟩
-      rcases ha' with ⟨a', ha'b, haa'⟩
-      rcases ha'b with ⟨ha'C, hab'⟩
-      -- So inf u^b ≤ uC a' < uC a
-      have hlt : uC ⟨a', ha'C⟩ < uC a := (huC a ⟨a', ha'C⟩).mp haa'
-      have hle : sInf (uAbove b) ≤ uC ⟨a', ha'C⟩ := csInf_le hbdd ⟨⟨a', ha'C⟩, hab', rfl⟩
-      rw [← has]
-      exact lt_of_le_of_lt hle hlt
-
-    -- On C, u agrees with uC
-    have h_u_C : ∀ q : IndiffQuot rs, ∀ hq : q ∈ C, u q = uC ⟨q, hq⟩ := by
-      intro q hq
-      exact dif_pos hq
-    -- For b ∉ C: u(c) < u(b) < u(a) for all values u(c) ∈ u_b and u(a) ∈ u^b
-    have h_u_between : ∀ b : IndiffQuot rs, b ∉ C →
-        (∀ r ∈ uBelow b, r < u b) ∧ (∀ s ∈ uAbove b, u b < s) := by
-      intro b hbC
-      have hu : u b = (sSup (uBelow b) + sInf (uAbove b)) / 2 := dif_neg hbC
-      -- sup u_b ≤ inf u^b, since every value below is smaller than every value above
-      have hsup_le : sSup (uBelow b) ≤ sInf (uAbove b) :=
-        csSup_le (h_uBelow_nonempty b hbC) (fun r hr ↦
-          le_csInf (h_uAbove_nonempty b hbC) (fun s hs ↦ (h_uBelow_lt_uAbove b r hr s hs).le))
+/-- Fishburn's theorem, backward direction, order separability part
+(f strictly consistent with ≻ ∧ ≻ weak order ⇒ X/∼ order separable):
+`OrderSeparable (IndiffQuotRel rs hwo)`. -/
+lemma orderSeparable_of_ordinalConsistentStrict {rs : Relation α} {f : α → ℝ}
+    (hocs : OrdinalConsistentStrict f rs) (hwo : WeakOrder rs) :
+    OrderSeparable (IndiffQuotRel rs hwo) := by
+  -- ===== Setup: the quotient, its relation and the lifted function =====
+  -- Since it is a weak order, we can define the quotient space
+  -- and lift most of the operations to the quotient
+  let QuotSet := {q : IndiffQuot rs | True}
+  let rq := IndiffQuotRel rs hwo
+  let fq := liftQuot f hocs
+  have hocsq : ∀ (a b : IndiffQuot rs), (a ≽[rq] b) ↔ (fq a > fq b) :=
+    liftQuot_ordinalConsistentStrict hocs hwo
+  have hidq : ∀ (a b : IndiffQuot rs), (a = b) ↔ (fq a = fq b) :=
+    liftQuot_eq_iff hocs hwo
+  -- ===== Define A: one element of the quotient for each rational interval =====
+  -- Define a countable set A as one element of the quotient
+  -- for each rational interval (a, b)
+  -- Set of closed intervals with rational endpoints
+  let Cs : Set (Set ℝ) :=
+    {C | ∃ (p q : ℚ) (hpq : p < q), C = {x : ℝ | p ≤ x ∧ x ≤ q}}
+  -- Subset of intervals that contain at least one image of f
+  let Is : Set (Set ℝ) :=
+    {I | ∃ (C : Set ℝ) (hc : C ∈ Cs) (x : α), f x ∈ C ∧ I = C}
+  -- Set of images per interval
+  let pAs : Set (Set (IndiffQuot rs)) :=
+    {S | ∃ (I : Set ℝ) (hI : I ∈ Is), S = (Quot.mk _ '' {x : α | f x ∈ I})}
+  have hpAsNonempty : ∀ S ∈ pAs, ∃ a, a ∈ S := by
+    intro S hS
+    rcases hS with ⟨I, hIinIs, rfl⟩
+    rcases hIinIs with ⟨C, _, x, hfxinC, hIeC⟩
+    have hsetNonempty : ∃ x : α, x ∈ {x : α | f x ∈ I} := by
+      rw [← hIeC] at hfxinC
+      exact ⟨x, hfxinC⟩
+    rcases hsetNonempty with ⟨x0, hx0⟩
+    exact ⟨Quot.mk _ x0, ⟨x0, hx0, rfl⟩⟩
+  -- Random choice of one element per image set
+  let A : Set (IndiffQuot rs) :=
+    {a | ∃ (S : Set (IndiffQuot rs)) (hS : S ∈ pAs),
+      a = Classical.choose (hpAsNonempty S hS)}
+  -- ===== A is countable =====
+  -- Show that A is countable by chaining countability results
+  have hcountableA : Countable A := by
+    -- Show that Cs is countable
+    have hcountableCs : Countable Cs := by
+      let P := {pq : ℚ × ℚ | pq.1 < pq.2}
+      have hcountableP : Countable P := by
+        let QxQ := {pq : ℚ × ℚ | True}
+        have hcountableQxQ : Countable QxQ := inferInstance
+        have hPsub : P ⊆ QxQ := by
+          intro pq _
+          trivial
+        exact Set.Countable.mono hPsub hcountableQxQ
+      let fCs : (ℚ × ℚ) → Set ℝ := fun pq ↦ {x : ℝ | pq.1 ≤ x ∧ x ≤ pq.2}
+      have h := Set.Countable.image hcountableP fCs
+      have hCsimg : Cs = fCs '' P := by
+        ext C
+        constructor
+        · intro hC
+          rcases hC with ⟨p, q, hpq, rfl⟩
+          have hpqP : (p, q) ∈ P := hpq
+          exact ⟨(p, q), hpqP, rfl⟩
+        · intro hC
+          rcases hC with ⟨⟨p, q⟩, hpq, rfl⟩
+          exact ⟨p, q, hpq, rfl⟩
+      rw [← hCsimg] at h
+      exact h
+    -- Show that Is is countable
+    have hcountableIs : Countable Is := by
+      have hIssub : Is ⊆ Cs := by
+        intro I hI
+        rcases hI with ⟨C, hCinCs, _, _, hIeC⟩
+        rw [hIeC]
+        exact hCinCs
+      exact Set.Countable.mono hIssub hcountableCs
+    -- Show that pAs is countable
+    have hcountablepAs : Countable pAs := by
+      let fpAs : Set ℝ → Set (IndiffQuot rs) := fun I ↦
+        Set.image (Quot.mk _) {x : α | f x ∈ I}
+      have h := Set.Countable.image hcountableIs fpAs
+      have hpAsimg : pAs = fpAs '' Is := by
+        ext S
+        constructor
+        · intro hS
+          rcases hS with ⟨I, hIinIs, rfl⟩
+          exact ⟨I, hIinIs, rfl⟩
+        · intro hS
+          rcases hS with ⟨I, hIinIs, rfl⟩
+          exact ⟨I, hIinIs, rfl⟩
+      rw [← hpAsimg] at h
+      exact h
+    -- Finally, show that A is countable
+    -- This requires subtypes for the axiom of choice
+    let pAsSubtype := {S // S ∈ pAs}
+    let pAsSet := {S : {S // S ∈ pAs} | True}
+    let fA : pAsSubtype → IndiffQuot rs := fun S ↦
+      Classical.choose (hpAsNonempty S.val S.property)
+    have hcountablepAsSubtype : Countable pAsSubtype :=
+      Set.Countable.to_subtype hcountablepAs
+    have hcountablepAsSet : Countable pAsSet :=
+      Set.countable_univ_iff.mpr hcountablepAsSubtype
+    have h := Set.Countable.image hcountablepAsSet fA
+    have hAimg : A = fA '' pAsSet := by
+      ext a
       constructor
-      · -- r < sup u_b ≤ u b
-        intro r hr
-        have hr_lt := h_lt_sSup b hbC r hr
-        rw [hu]
-        linarith
-      · -- u b ≤ inf u^b < s
-        intro s hs
-        have hs_gt := h_sInf_lt b hbC s hs
-        rw [hu]
-        linarith
-    -- u preserves the strict order: p ≻ q → u p > u q
-    have h_u_gt : ∀ p q : IndiffQuot rs, p ≽[rq] q → u p > u q := by
-      intro p q hpq
-      by_cases hpC : p ∈ C <;> by_cases hqC : q ∈ C
-      · -- p, q ∈ C: u is uC, which represents rC
-        rw [h_u_C p hpC, h_u_C q hqC]
-        exact (huC ⟨p, hpC⟩ ⟨q, hqC⟩).mp hpq
-      · -- p ∈ C, q ∉ C: u p is a value in u^q
-        rw [h_u_C p hpC]
-        exact (h_u_between q hqC).2 _ ⟨⟨p, hpC⟩, hpq, rfl⟩
-      · -- p ∉ C, q ∈ C: u q is a value in u_p
-        rw [h_u_C q hqC]
-        exact (h_u_between p hpC).1 _ ⟨⟨q, hqC⟩, hpq, rfl⟩
-      · -- p, q ∉ C: by order denseness some z ∈ A ⊆ C lies between, so u q < u z < u p
-        have hpA : p ∉ A := fun h ↦ hpC (Or.inl h)
-        have hqA : q ∉ A := fun h ↦ hqC (Or.inl h)
-        rcases h_order_dense_A p q ⟨hpq, hpA, hqA⟩ with ⟨z, hzA, hpz, hzq⟩
-        have hqz := (h_u_between q hqC).2 _ ⟨⟨z, Or.inl hzA⟩, hzq, rfl⟩
-        have hzp := (h_u_between p hpC).1 _ ⟨⟨z, Or.inl hzA⟩, hpz, rfl⟩
-        exact lt_trans hqz hzp
-    -- u represents the order on the quotient
-    have h_u_rep : ∀ p q : IndiffQuot rs, p ≽[rq] q ↔ u p > u q := by
-      intro p q
+      · intro ha
+        rcases ha with ⟨S, hSinpAs, rfl⟩
+        exact ⟨⟨S, hSinpAs⟩, trivial, rfl⟩
+      · intro ha
+        rcases ha with ⟨⟨S, hSinpAs⟩, _, rfl⟩
+        exact ⟨S, hSinpAs, rfl⟩
+    rw [← hAimg] at h
+    exact h
+  -- ===== Define K, the pairs (b, c) outside A with no element of A between them =====
+  -- Define K
+  let K : Set (IndiffQuot rs × IndiffQuot rs) :=
+    {bc | bc.1 ∈ QuotSet \ A ∧ bc.2 ∈ QuotSet \ A
+      ∧ bc.2 ≽[rq] bc.1 ∧ ¬∃ a ∈ A, bc.2 ≽[rq] a ∧ a ≽[rq] bc.1}
+  -- ===== K is countable =====
+  -- Show that K is countable
+  have hcountableK : Countable K := by
+    -- ===== The intervals (f(b), f(c)) contain no other f(a) =====
+    -- Show that intervals are empty of other f(a)
+    have hfbcEmpty : ∀ bc ∈ K, ¬∃ a ∈ QuotSet, bc.2 ≽[rq] a ∧ a ≽[rq] bc.1 := by
+      intro bc hbc
+      rcases hbc with ⟨_, _, _, hnoA⟩
+      intro ha
+      rcases ha with ⟨a, _, hcsa, hasb⟩
+      -- Assume that there is such a, then there is d in A with f(bc.1) < f(d) < f(bc.2)
+      -- which leads to contradiction of (b,c) ∈ K
+      have hexd : ∃ d ∈ A, bc.2 ≽[rq] d ∧ d ≽[rq] bc.1 := by
+        -- f(c) > f(a) > f(b)
+        have hfasb : fq a > fq bc.1 := (hocsq a bc.1).mp hasb
+        have hfcsa : fq bc.2 > fq a := (hocsq bc.2 a).mp hcsa
+        -- Find an interval (p, q) with rational endpoints such that
+        -- f(a) ∈ (p, q)
+        rcases exists_rat_btwn hfasb with ⟨prat, hprat₁, hprat₂⟩
+        rcases exists_rat_btwn hfcsa with ⟨qrat, hqrat₁, hqrat₂⟩
+        have hpq : prat < qrat := Rat.cast_lt.1 (lt_trans hprat₂ hqrat₁)
+        -- Define the interval and show it is in Is
+        let C := {x : ℝ | prat ≤ x ∧ x ≤ qrat}
+        have hCinCs : C ∈ Cs := ⟨prat, qrat, hpq, rfl⟩
+        let I := C
+        have hfqainI : fq a ∈ I := ⟨le_of_lt hprat₂, le_of_lt hqrat₁⟩
+        have hIinIs : I ∈ Is := by
+          cases a using Quot.inductionOn with
+          | _ x =>
+            have hfxinC : f x ∈ C := by
+              simp only [fq] at hfqainI
+              exact hfqainI
+            exact ⟨C, hCinCs, x, hfxinC, rfl⟩
+        -- Consider the set S in pAs
+        let S := Quot.mk (fun x y ↦ x ∼ₛ[rs] y) '' {x : α | f x ∈ I}
+        have hSinpAs : S ∈ pAs := ⟨I, hIinIs, rfl⟩
+        -- The chosen element d in A
+        let d := Classical.choose (hpAsNonempty S hSinpAs)
+        have hdA : d ∈ A := ⟨S, hSinpAs, rfl⟩
+        -- Show that d satisfies the inequalities
+        have hdbetween : bc.2 ≽[rq] d ∧ d ≽[rq] bc.1 := by
+          have hdS : d ∈ S := Classical.choose_spec (hpAsNonempty S hSinpAs)
+          rcases hdS with ⟨x, hfxinI, hxed⟩
+          have hfxinC : f x ∈ C := by
+            simp only [I] at hfxinI
+            exact hfxinI
+          have hdsb : d ≽[rq] bc.1 := by
+            have hfxsb : f x > fq bc.1 := lt_of_lt_of_le hprat₁ hfxinC.left
+            have hfdsb : fq d > fq bc.1 := by
+              rw [← hxed]
+              simp only [fq]
+              exact hfxsb
+            exact (hocsq d bc.1).mpr hfdsb
+          have hcsd : bc.2 ≽[rq] d := by
+            have hfcsx : fq bc.2 > f x := lt_of_le_of_lt hfxinC.right hqrat₂
+            have hfcsd : fq bc.2 > fq d := by
+              rw [← hxed]
+              simp only [fq]
+              exact hfcsx
+            exact (hocsq bc.2 d).mpr hfcsd
+          exact ⟨hcsd, hdsb⟩
+        exact ⟨d, hdA, hdbetween⟩
+      exact hnoA hexd
+    -- ===== The intervals (f(b), f(c)) are pairwise disjoint =====
+    -- Show that then these intervals (f(b), f(c)) are disjoint
+    let s : IndiffQuot rs × IndiffQuot rs → Set ℝ := fun bc ↦ Set.Ioo (fq bc.1) (fq bc.2)
+    have hdisjoint : K.PairwiseDisjoint s := by
+      intro bc1 hbc1K bc2 hbc2K hbc1nebc2
+      rw [Function.onFun, Disjoint]
+      simp only [s, Set.le_eq_subset, Set.bot_eq_empty, Set.subset_empty_iff]
+      -- If x is in the intersection it has to be empty
+      intro x hxIoo1 hxIoo2
+      -- If its not empty, we can get an element and get a contradiction
+      by_contra hne
+      have hexa : ∃ a, a ∈ x := Set.nonempty_def.mp (Set.nonempty_iff_ne_empty.mpr hne)
+      let a := Classical.choose hexa
+      have hax : a ∈ x := Classical.choose_spec hexa
+      have haIoo1 : a ∈ Set.Ioo (fq bc1.1) (fq bc1.2) := hxIoo1 hax
+      have haIoo2 : a ∈ Set.Ioo (fq bc2.1) (fq bc2.2) := hxIoo2 hax
+      -- From this we get that one of the extremes is in one of the intervals
+      -- First, both ends cannot be equal in f, since then the two pairs would be equal
+      have hendsne :
+          (fq bc1.1 = fq bc2.1 → fq bc1.2 ≠ fq bc2.2) ∧
+          (fq bc1.2 = fq bc2.2 → fq bc1.1 ≠ fq bc2.1) := by
+        constructor
+        · intro he₁
+          by_contra he₂
+          have hbc1ebc2 : bc1 = bc2 := by
+            apply Prod.ext
+            · exact (hidq bc1.1 bc2.1).mpr he₁
+            · exact (hidq bc1.2 bc2.2).mpr he₂
+          exact hbc1nebc2 hbc1ebc2
+        · intro he₂
+          by_contra he₁
+          have hbc1ebc2 : bc1 = bc2 := by
+            apply Prod.ext
+            · exact (hidq bc1.1 bc2.1).mpr he₁
+            · exact (hidq bc1.2 bc2.2).mpr he₂
+          exact hbc1nebc2 hbc1ebc2
+      -- Therefore, one of the endpoints is in the other's interval
+      have honeinf :
+          (fq bc1.1 < fq bc2.1 ∧ fq bc2.1 < fq bc1.2) ∨
+          (fq bc1.1 < fq bc2.2 ∧ fq bc2.2 < fq bc1.2) ∨
+          (fq bc2.1 < fq bc1.1 ∧ fq bc1.1 < fq bc2.2) ∨
+          (fq bc2.1 < fq bc1.2 ∧ fq bc1.2 < fq bc2.2) := by
+        have ha1 := Set.mem_Ioo.mp haIoo1
+        have ha2 := Set.mem_Ioo.mp haIoo2
+        exact interval_endpoint_inside_of_intersection ha1 ha2 hendsne
+      -- Therefore, there is an element of A in the interval
+      have honein :
+          (bc2.1 ≽[rq] bc1.1 ∧ bc1.2 ≽[rq] bc2.1) ∨
+          (bc2.2 ≽[rq] bc1.1 ∧ bc1.2 ≽[rq] bc2.2) ∨
+          (bc1.1 ≽[rq] bc2.1 ∧ bc2.2 ≽[rq] bc1.1) ∨
+          (bc1.2 ≽[rq] bc2.1 ∧ bc2.2 ≽[rq] bc1.2) := by
+        simpa [hocsq] using honeinf
+      -- This contradicts the property of (b,c) ∈ K that they are empty of other f(a)
+      have hcont {bc a} (hK : bc ∈ K)
+          (hin : a ∈ QuotSet) (hrq : rq a bc.1 ∧ rq bc.2 a)
+          (hempty : ∀ bc ∈ K, ¬∃ a ∈ QuotSet, rq bc.2 a ∧ rq a bc.1) :
+          False :=
+        (hempty bc hK) ⟨a, hin, hrq.right, hrq.left⟩
+      cases honein with
+      | inl h₁ =>
+        exact hcont hbc1K (by trivial) h₁ hfbcEmpty
+      | inr hrest =>
+        cases hrest with
+        | inl h₂ =>
+          exact hcont hbc1K (by trivial) h₂ hfbcEmpty
+        | inr hrest₂ =>
+          cases hrest₂ with
+          | inl h₃ =>
+            exact hcont hbc2K (by trivial) h₃ hfbcEmpty
+          | inr h₄ =>
+            exact hcont hbc2K (by trivial) h₄ hfbcEmpty
+    -- ===== Disjoint nonempty open intervals in ℝ: K is countable =====
+    -- Show that since each (b,c) ∈ K defines (f(b),f(c)) as
+    -- an open, non-empty, disjoint intervals in ℝ,
+    -- then K is countable
+    have hopen : ∀ bc ∈ K, IsOpen (s bc) := by
+      intro bc _
+      exact isOpen_Ioo
+    have hnonempty : ∀ bc ∈ K, (s bc).Nonempty := by
+      intro bc hbc
+      rcases hbc with ⟨_, _, hcsb, _⟩
+      have hfcsb : fq bc.2 > fq bc.1 := (hocsq bc.2 bc.1).mp hcsb
+      exact Set.nonempty_Ioo.2 hfcsb
+    exact Set.PairwiseDisjoint.countable_of_isOpen hdisjoint hopen hnonempty
+  -- ===== Define B, the endpoints of the pairs in K, and show it is countable =====
+  -- Define B
+  let B : Set (IndiffQuot rs) :=
+    {b | ∃ c ∈ QuotSet, ((b, c) ∈ K ∨ (c, b) ∈ K)}
+  -- Show that B is countable
+  have hcountableB : Countable B := by
+    -- Define subsets of B
+    let Bl : Set (IndiffQuot rs) :=
+      {b | ∃ c ∈ QuotSet, (b, c) ∈ K}
+    let Br : Set (IndiffQuot rs) :=
+      {b | ∃ c ∈ QuotSet, (c, b) ∈ K}
+    -- Show they are countable as images of K
+    have hcountableBl : Countable Bl := by
+      let fBl : IndiffQuot rs × IndiffQuot rs → IndiffQuot rs := fun bc ↦ bc.1
+      have himg := Set.Countable.image hcountableK fBl
+      have hBlimg : Bl = fBl '' K := by
+        ext b
+        constructor
+        · intro hb
+          rcases hb with ⟨c, _, hbcK⟩
+          exact ⟨(b, c), hbcK, rfl⟩
+        · intro hb
+          rcases hb with ⟨⟨b, c⟩, hbcK, rfl⟩
+          exact ⟨c, Set.mem_of_mem_diff hbcK.2.1, hbcK⟩
+      rw [← hBlimg] at himg
+      exact himg
+    have hcountableBr : Countable Br := by
+      let fBr : IndiffQuot rs × IndiffQuot rs → IndiffQuot rs := fun bc ↦ bc.2
+      have himg := Set.Countable.image hcountableK fBr
+      have hBrimg : Br = fBr '' K := by
+        ext b
+        constructor
+        · intro hb
+          rcases hb with ⟨c, _, hcbK⟩
+          exact ⟨(c, b), hcbK, rfl⟩
+        · intro hb
+          rcases hb with ⟨⟨c, b⟩, hcbK, rfl⟩
+          exact ⟨c, Set.mem_of_mem_diff hcbK.1, hcbK⟩
+      rw [← hBrimg] at himg
+      exact himg
+    -- Finally, B is the union of both
+    have hBunion : B = Bl ∪ Br := by
+      ext b
       constructor
-      · -- Forward direction: p ≻ q → u p > u q
-        exact h_u_gt p q
-      · -- Backward direction: u p > u q → p ≻ q, by totality
-        intro hupq
-        by_contra hnpq
-        by_cases hpq_eq : p = q
-        · rw [hpq_eq] at hupq
-          exact lt_irrefl _ hupq
-        · rcases indiff_quot_rel_total h_weak_order p q hpq_eq with hpq | hqp
-          · exact hnpq hpq
-          · exact lt_asymm hupq (h_u_gt q p hqp)
-    -- (3.1): lift u to α
-    exact ⟨fun x ↦ u (Quot.mk _ x), fun x y ↦ h_u_rep (Quot.mk _ x) (Quot.mk _ y)⟩
+      · intro hb
+        rcases hb with ⟨c, hcQ, hor⟩
+        cases hor with
+        | inl hbcK => exact Or.inl ⟨c, hcQ, hbcK⟩
+        | inr hcbK => exact Or.inr ⟨c, hcQ, hcbK⟩
+      · intro hb
+        cases hb with
+        | inl hbBl =>
+          rcases hbBl with ⟨c, hcQ, hbcK⟩
+          exact ⟨c, hcQ, Or.inl hbcK⟩
+        | inr hbBr =>
+          rcases hbBr with ⟨c, hcQ, hcbK⟩
+          exact ⟨c, hcQ, Or.inr hcbK⟩
+    rw [hBunion]
+    exact Set.Countable.union hcountableBl hcountableBr
+  -- ===== D = A ∪ B is countable and order dense =====
+  -- Define our final dense set D
+  let D : Set (IndiffQuot rs) := A ∪ B
+  -- Show that D is countable
+  have hcountableD : Countable D := Set.Countable.union hcountableA hcountableB
+  -- Show that D is dense
+  have hdenseD : OrderDense D rq := by
+    intro c b hcb
+    rcases hcb with ⟨hcsb, hncD, hnbD⟩
+    -- b, c ∉ D implies b, c ∉ A and ∉ B
+    have hnbA : b ∉ A := by
+      intro hbA
+      exact hnbD (Set.mem_union_left B hbA)
+    have hncA : c ∉ A := by
+      intro hcA
+      exact hncD (Set.mem_union_left B hcA)
+    have hnbB : b ∉ B := by
+      intro hbB
+      exact hnbD (Set.mem_union_right A hbB)
+    -- From b, c ∉ A we have that b, c ∈ QuotSet \ A
+    have hbQA : b ∈ QuotSet \ A := ⟨by trivial, hnbA⟩
+    have hcQA : c ∈ QuotSet \ A := ⟨by trivial, hncA⟩
+    -- From b, c ∉ B we have that (b, c) ∉ K
+    have hnbcK : (b, c) ∉ K := by
+      intro hbcK
+      exact hnbB ⟨c, Set.mem_of_mem_diff hbcK.2.1, Or.inl hbcK⟩
+    -- Therefore, there is d ∈ D such that c ≽[rq] d ≽[rq] b
+    -- If there was no such d, then there would be no a ∈ A such that c ≽[rq] a ≽[rq] b
+    -- and then (b, c) ∈ K contradicting previous
+    by_contra hnod
+    have hnoa : ∀ a ∈ A, ¬(c ≽[rq] a ∧ a ≽[rq] b) := by
+      intro a haA hcab
+      rcases hcab with ⟨hcsa, hasb⟩
+      exact hnod ⟨a, Set.mem_union_left B haA, ⟨hcsa, hasb⟩⟩
+    have hbcK : (b, c) ∈ K := ⟨hbQA, hcQA, hcsb, by simpa using hnoa⟩
+    exact hnbcK hbcK
+  -- So D is the required dense countable set, and it is order separable
+  exact ⟨D, hcountableD, hdenseD⟩
 
+/-! #### Fishburn's theorem -/
 
+/-- Fishburn's theorem (≻ weak order ∧ X/∼ order separable ⇔ ∃ f : X → ℝ with
+x ≻ y ⇔ f(x) > f(y)):
+`(∃ h : weak_order rs, order_separable (IndiffQuotRel rs h)) ↔
+∃ f : α → ℝ, ordinal_consistent_strict f rs`.
 
-  · -- Backward direction: ∃ function → weak order ∧ order_separable
-    intro h_exists
-    rcases h_exists with ⟨f, h_ord_cons_strict⟩
-
-    -- Weak order
-    have h_weak_order : weak_order rs := by
-      -- rs is asymmetric
-      have h_asym : asymmetry rs := by
-        intro x y h_xy h_yx
-        have h_fx_gt_fy := (h_ord_cons_strict x y).mp h_xy
-        have h_fy_gt_fx := (h_ord_cons_strict y x).mp h_yx
-        exact not_le.mpr h_fy_gt_fx (le_of_lt h_fx_gt_fy)
-      -- rs is negatively transitive
-      have h_neg_trans : negative_transitivity rs := by
-        intro x y z h_not_xyz
-        rcases h_not_xyz with ⟨h_not_xy, h_not_yz⟩
-        have h_nfx_gt_fy : ¬ (f x > f y) := by
-          intro h_fx_gt_fy
-          exact h_not_xy ((h_ord_cons_strict x y).mpr h_fx_gt_fy)
-        have h_nfy_gt_fz : ¬ (f y > f z) := by
-          intro h_fy_gt_fz
-          exact h_not_yz ((h_ord_cons_strict y z).mpr h_fy_gt_fz)
-        have h_nfz_gt_fx : ¬ (f x > f z) := by
-          intro h_fx_gt_fz
-          have h_fy_ge_fz := le_of_not_gt h_nfy_gt_fz
-          have h_fx_gt_fy := le_of_not_gt h_nfx_gt_fy
-          exact (not_lt.mpr (le_trans h_fx_gt_fy h_fy_ge_fz)) h_fx_gt_fz
-        intro h_xz
-        exact h_nfz_gt_fx ((h_ord_cons_strict x z).mp h_xz)
-      exact ⟨h_asym, h_neg_trans⟩
-
-    -- Since it is a weak order, we can define the quotient space
-    -- and lift most of the operations to the quotient
-    let QuotSet := {q : IndiffQuot rs | True}
-    let rq := IndiffQuotRel rs h_weak_order
-    let fq : IndiffQuot rs → ℝ :=
-      Quot.lift (r := fun x y => x ∼ₛ[rs] y) f
-      (by
-        -- a ∼ₛ[rs] b → f a = f b
-        intro a b h_ab
-        rcases h_ab with ⟨h_nab, h_nba⟩
-        have h_fa_eq_fb : f a = f b := by
-          have h_fa_ge_fb : f a ≥ f b := by
-            by_contra h_nfa_ge_fb
-            have h_fb_lt_fa := lt_of_not_ge h_nfa_ge_fb
-            exact h_nba ((h_ord_cons_strict b a).mpr h_fb_lt_fa)
-          have h_fb_ge_fa : f b ≥ f a := by
-            by_contra h_nfb_ge_fa
-            have h_fa_lt_fb := lt_of_not_ge h_nfb_ge_fa
-            exact h_nab ((h_ord_cons_strict a b).mpr h_fa_lt_fb)
-          exact le_antisymm h_fb_ge_fa h_fa_ge_fb
-        exact h_fa_eq_fb
-      )
-
-    let h_ord_cons_strict_q : ∀ (a b : IndiffQuot rs), (a ≽[rq] b) ↔ (fq a > fq b) := by
-      intro a b
-      apply Iff.intro
-      · -- a ≽[rq] b → fq a > fq b
-        refine Quot.induction_on₂ a b ?_
-        intro x y h_ab
-        have h_xy : x ≽[rs] y := by
-          simp only [rq, IndiffQuotRel] at h_ab
-          exact h_ab
-        have h_fx_gt_fy : f x > f y := by
-          exact (h_ord_cons_strict x y).mp h_xy
-        exact h_fx_gt_fy
-      · -- fq a > fq b → a ≽[rq] b
-        refine Quot.induction_on₂ a b ?_
-        intro x y h_fa_gt_fb
-        have h_fx_gt_fy : f x > f y := by
-          exact h_fa_gt_fb
-        have h_xy : x ≽[rs] y := by
-          exact (h_ord_cons_strict x y).mpr h_fx_gt_fy
-        simp only [rq, IndiffQuotRel]
-        exact h_xy
-
-    let h_id_cons_strict_q : ∀ (a b : IndiffQuot rs), (a = b) ↔ (fq a = fq b) := by
-      intro a b
-      apply Iff.intro
-      · -- a = b → fq a = fq b
-        intro h_ab
-        rw [h_ab]
-      · -- fq a = fq b → a = b
-        intro h_fa_eq_fb
-        have h_nfa_gt_fb : ¬ (fq a > fq b) := by
-          have h_fa_eq_or_lt_fb : (fq b = fq a) ∨ (fq a < fq b) := by
-            exact Or.inl h_fa_eq_fb.symm
-          exact not_lt_iff_eq_or_lt.mpr h_fa_eq_or_lt_fb
-        have h_nfb_gt_fa : ¬ (fq b > fq a) := by
-          have h_fb_eq_or_lt_fa : (fq a = fq b) ∨ (fq b < fq a) := by
-            exact Or.inl h_fa_eq_fb
-          exact not_lt_iff_eq_or_lt.mpr h_fb_eq_or_lt_fa
-        have h_na_rq_b : ¬ (a ≽[rq] b) := by
-          intro h_a_rb
-          have h_fa_gt_fb := (h_ord_cons_strict_q a b).mp h_a_rb
-          exact h_nfa_gt_fb h_fa_gt_fb
-        have h_nb_rq_a : ¬ (b ≽[rq] a) := by
-          intro h_b_ra
-          have h_fb_gt_fa := (h_ord_cons_strict_q b a).mp h_b_ra
-          exact h_nfb_gt_fa h_fb_gt_fa
-        have h_ab : a = b := by
-          revert h_na_rq_b h_nb_rq_a
-          refine Quot.induction_on₂ a b ?_
-          intro x y h_na_rq_b h_nb_rq_a
-          have h_nxy : ¬ (x ≽[rs] y) := by
-            intro h_xy
-            simp only [rq, IndiffQuotRel] at h_na_rq_b
-            exact h_na_rq_b h_xy
-          have h_nyx : ¬ (y ≽[rs] x) := by
-            intro h_yx
-            simp only [rq, IndiffQuotRel] at h_nb_rq_a
-            exact h_nb_rq_a h_yx
-          have h_xy_equiv : x ∼ₛ[rs] y := by
-            exact ⟨h_nxy, h_nyx⟩
-          exact Quot.sound h_xy_equiv
-        exact h_ab
-
-
-    -- Order separability
-    have h_order_separable : order_separable (IndiffQuotRel rs h_weak_order) := by
-
-      -- Define a countable set A as one element of the quotient
-      -- for each rational interval (a, b)
-
-      -- Set of closed intervals with rational endpoints
-      let Cs : Set (Set ℝ) :=
-        { C | ∃ (p q : ℚ) (hpq : p < q), C = { x : ℝ | p ≤ x ∧ x ≤ q } }
-
-      -- Subset of intervals that contain at least one image of f
-      let Is : Set (Set ℝ) :=
-        { I | ∃ (C : Set ℝ) (hc: C ∈ Cs) (x : α), f x ∈ C ∧ I = C}
-      have h_Is_nonempty : ∀ I ∈ Is, ∃ fx, fx ∈ I := by
-        intro I h_I
-        rcases h_I with ⟨C, h_C_in_Cs, x, h_fx_in_C, h_I_eq_C⟩
-        exact ⟨f x, by rw [h_I_eq_C]; exact h_fx_in_C⟩
-
-      -- Set of images per interval
-      let pAs : Set (Set (IndiffQuot rs)) :=
-        { S | ∃ (I : Set ℝ) (hI : I ∈ Is), S = (Quot.mk _ '' { x : α | f x ∈ I })}
-      have h_pAs_nonempty : ∀ S ∈ pAs, ∃ a, a ∈ S := by
-        intro S h_S
-        rcases h_S with ⟨I, h_I_in_Is, rfl⟩
-        rcases h_Is_nonempty I h_I_in_Is with ⟨fx, h_fx_in_I⟩
-        rcases h_I_in_Is with ⟨C, h_C_in_Cs, x, h_fx_in_C, h_I_eq_C⟩
-        have h_set_nonempty : ∃ x : α, x ∈ {x : α | f x ∈ I} := by
-          rw [←h_I_eq_C] at h_fx_in_C
-          use x
-          exact h_fx_in_C
-        rcases h_set_nonempty with ⟨x0, h_x0_in_set⟩
-        exact ⟨Quot.mk _ x0, ⟨x0, h_x0_in_set, rfl⟩⟩
-
-      -- Random choice of one element per image set
-      let A : Set (IndiffQuot rs) :=
-        { a | ∃ (S : Set (IndiffQuot rs)) (hS : S ∈ pAs),
-        a = Classical.choose (h_pAs_nonempty S hS)}
-
-      -- Show that A is countable by chaining countability results
-      have h_A_countable : Countable A := by
-        -- Show that Cs is countable
-        have h_C_countable : Countable Cs := by
-          let P := { pq : ℚ × ℚ | pq.1 < pq.2 }
-          have h_P_countable : Countable P := by
-            let QxQ := { pq : ℚ × ℚ | True }
-            have h_QxQ_countable : Countable QxQ :=
-              inferInstance
-            have h_P_subset : P ⊆ QxQ := by
-              intro pq h_pq
-              trivial
-            exact Set.Countable.mono h_P_subset h_QxQ_countable
-          let f_Cs : (ℚ × ℚ) → Set ℝ := fun pq => { x : ℝ | pq.1 ≤ x ∧ x ≤ pq.2 }
-          have h := Set.Countable.image h_P_countable f_Cs
-          have h_C_img : Cs = f_Cs '' P := by
-            ext C
-            constructor
-            · rintro ⟨p, q, hpq, rfl⟩
-              have hpq_pair : (p,q) ∈ P := hpq
-              use (p,q)
-            · rintro ⟨⟨p,q⟩, hpq, rfl⟩
-              exact ⟨p, q, hpq ,rfl⟩
-          rw [←h_C_img] at h
-          exact h
-        -- Show that Is is countable
-        have h_I_countable : Countable Is := by
-          have h_I_subset : Is ⊆ Cs := by
-            intro I h_I
-            rcases h_I with ⟨C, h_C_in_Cs, x, h_fx_in_C, h_I_eq_C⟩
-            rw [h_I_eq_C]
-            exact h_C_in_Cs
-          exact Set.Countable.mono h_I_subset h_C_countable
-        -- Show that pAs is countable
-        have h_pAs_countable : Countable pAs := by
-          let f_pAs : Set ℝ → Set (IndiffQuot rs) := fun I =>
-            Set.image (Quot.mk _) { x : α | f x ∈ I}
-          have h := Set.Countable.image h_I_countable f_pAs
-          have h_pAs_img : pAs = f_pAs '' Is := by
-            ext S
-            constructor
-            · rintro ⟨I, h_I_in_Is, rfl⟩
-              use I
-            · rintro ⟨I, h_I_in_Is, rfl⟩
-              exact ⟨I, h_I_in_Is, rfl⟩
-          rw [←h_pAs_img] at h
-          exact h
-        -- Finally, show that A is countable
-        -- This requires subtypes for the axiom of choice
-        let pAs_subtype := {S // S ∈ pAs}
-        let pAs_set := {S : {S // S ∈ pAs} | True}
-        let f_A : pAs_subtype → IndiffQuot rs := fun S =>
-          Classical.choose (h_pAs_nonempty S.val S.property)
-        have h_pAs_subtype_countable : Countable pAs_subtype := by
-          exact Set.Countable.to_subtype h_pAs_countable
-        have h_pAs_univ_countable : Countable pAs_set := by
-          exact Set.countable_univ_iff.mpr h_pAs_subtype_countable
-        have h := Set.Countable.image h_pAs_univ_countable f_A
-        have h_A_img : A = f_A '' pAs_set := by
-          ext a
-          constructor
-          · rintro ⟨S, hS_in_pAs, rfl⟩
-            exact ⟨⟨S, hS_in_pAs⟩, trivial, rfl⟩
-          · rintro ⟨⟨S, hS_in_pAs⟩, _, rfl⟩
-            exact ⟨S, hS_in_pAs, rfl⟩
-        rw [←h_A_img] at h
-        exact h
-
-      -- Define K
-      let K : Set (IndiffQuot rs × IndiffQuot rs) :=
-        { bc | bc.1 ∈ QuotSet \ A ∧ bc.2 ∈ QuotSet \ A
-        ∧ bc.2 ≽[rq] bc.1 ∧ ¬ ∃ a ∈ A, bc.2 ≽[rq] a ∧ a ≽[rq] bc.1}
-
-      -- Show that K is countable
-      have h_K_countable : Countable K := by
-
-        -- Show that intervals are empty of other f(a)
-        have h_fbc_empty_fa : ∀ bc ∈ K, ¬ ∃ a ∈ QuotSet, bc.2 ≽[rq] a ∧ a ≽[rq] bc.1 := by
-          intro bc h_bc
-          rcases h_bc with ⟨h_b1_notin_A, h_b2_notin_A, h_b2_ge_b1, h_no_a_in_A⟩
-          rintro ⟨a, h_a_in_QuotSet, h_b2_ge_a, h_a_ge_b1⟩
-          -- Assume that there is such a, then there is d in A with f(bc.1) < f(d) < f(bc.2)
-          -- which leads to contradiction of (b,c) ∈ K
-          have h_d_in_A : ∃ d ∈ A, bc.2 ≽[rq] d ∧ d ≽[rq] bc.1 := by
-            -- f(c) > f(a) > f(b)
-            have h_fa_gt_fb1 : fq a > fq bc.1 := by
-              exact (h_ord_cons_strict_q a bc.1).mp h_a_ge_b1
-            have h_fbc2_gt_fa : fq bc.2 > fq a := by
-              exact (h_ord_cons_strict_q bc.2 a).mp h_b2_ge_a
-            -- Find an interval (p, q) with rational endpoints such that
-            -- f(a) ∈ (p, q)
-            obtain ⟨prat, h_prat1, h_prat2⟩ := exists_rat_btwn h_fa_gt_fb1
-            obtain ⟨qrat, h_qrat1, h_qrat2⟩ := exists_rat_btwn h_fbc2_gt_fa
-            have h_prat_lt_qrat : prat < qrat := by
-              exact Rat.cast_lt.1 (lt_trans h_prat2 h_qrat1)
-            -- Define the interval and show it is in Is
-            let C := { x : ℝ | prat ≤ x ∧ x ≤ qrat }
-            have h_C_in_Cs : C ∈ Cs := by
-              use prat, qrat, h_prat_lt_qrat
-            let I := C
-            have h_fqa_in_I : fq a ∈ I := by
-              exact ⟨le_of_lt h_prat2, le_of_lt h_qrat1⟩
-            have h_I_in_Is : I ∈ Is := by
-              cases a using Quot.inductionOn with
-              | _ x =>
-                have h_fx_in_C : f x ∈ C := by
-                  simp only [fq] at h_fqa_in_I
-                  exact h_fqa_in_I
-                use C, h_C_in_Cs, x, h_fx_in_C
-            -- Consider the set S in pAs
-            let S := Quot.mk (fun x y => x ∼ₛ[rs] y) '' { x : α | f x ∈ I }
-            have h_S_in_pAs : S ∈ pAs := by
-              use I, h_I_in_Is
-            -- The chosen element d in A
-            let d := Classical.choose (h_pAs_nonempty S h_S_in_pAs)
-            have h_d_in_A : d ∈ A := by
-              use S, h_S_in_pAs
-            -- Show that d satisfies the inequalities
-            have h_d_in_bc : bc.2 ≽[rq] d ∧ d ≽[rq] bc.1 := by
-              have h_d_in_S : d ∈ S := by
-                exact Classical.choose_spec (h_pAs_nonempty S h_S_in_pAs)
-              rcases h_d_in_S with ⟨x, h_fx_in_I, h_x_quotd⟩
-              have h_fx_in_C : f x ∈ C := by
-                simp only [I] at h_fx_in_I
-                exact h_fx_in_I
-              have h_d_ge_b1 : d ≽[rq] bc.1 := by
-                have h_fx_gt_fb1 : f x > fq bc.1 := by
-                  exact lt_of_lt_of_le h_prat1 h_fx_in_C.left
-                have h_fqd_gt_fb1 : fq d > fq bc.1 := by
-                  rw [←h_x_quotd]
-                  simp only [fq]
-                  exact h_fx_gt_fb1
-                exact (h_ord_cons_strict_q d bc.1).mpr h_fqd_gt_fb1
-              have h_b2_ge_d : bc.2 ≽[rq] d := by
-                have h_fbc2_gt_fx : fq bc.2 > f x := by
-                  exact lt_of_le_of_lt h_fx_in_C.right h_qrat2
-                have h_fbc2_gt_fqd : fq bc.2 > fq d := by
-                  rw [←h_x_quotd]
-                  simp only [fq]
-                  exact h_fbc2_gt_fx
-                exact (h_ord_cons_strict_q bc.2 d).mpr h_fbc2_gt_fqd
-              exact ⟨h_b2_ge_d, h_d_ge_b1⟩
-            exact ⟨d, h_d_in_A, h_d_in_bc⟩
-          exact h_no_a_in_A h_d_in_A
-
-        -- Show that then these intervals (f(b), f(c)) are disjoint
-        let s : IndiffQuot rs × IndiffQuot rs → Set ℝ := fun bc => Set.Ioo (fq bc.1) (fq bc.2)
-        have h_fbfc_disjoint : K.PairwiseDisjoint s := by
-          intro bc1 h_bc1_in_K bc2 h_bc2_in_K h_bc1_ne_bc2
-          rw [Function.onFun, Disjoint]
-          simp only [s, Set.le_eq_subset, Set.bot_eq_empty, Set.subset_empty_iff]
-          -- If x is in the intersection it has to be empty
-          intro x h_x_in_Ioo1 h_x_in_Ioo2
-          -- If its not empty, we can get an element and get a contradiction
-          by_contra h_notempty
-          have h_exists_a_in_x : ∃ a, a ∈ x := by
-            exact Set.nonempty_def.mp (Set.nonempty_iff_ne_empty.mpr h_notempty)
-          let a := Classical.choose h_exists_a_in_x
-          have h_a_in_x : a ∈ x := Classical.choose_spec h_exists_a_in_x
-          have h_a_in_Ioo1 : a ∈ Set.Ioo (fq bc1.1) (fq bc1.2) := by
-            exact h_x_in_Ioo1 h_a_in_x
-          have h_a_in_Ioo2 : a ∈ Set.Ioo (fq bc2.1) (fq bc2.2) := by
-            exact h_x_in_Ioo2 h_a_in_x
-
-          -- From this we get that one of the extremes is in one of the intervals
-          -- First, both ends cannot be equal
-          have h_proof_oneeq_otherneq :
-            (bc1.1 = bc2.1 → bc1.2 ≠ bc2.2) ∧
-            (bc1.2 = bc2.2 → bc1.1 ≠ bc2.1) := by
-              constructor
-              · intro h_eq1
-                by_contra h_eq2
-                have h_bc1_eq_bc2 : bc1 = bc2 := by
-                  apply Prod.ext
-                  · exact h_eq1
-                  · exact h_eq2
-                exact h_bc1_ne_bc2 h_bc1_eq_bc2
-              · intro h_eq2
-                by_contra h_eq1
-                have h_bc1_eq_bc2 : bc1 = bc2 := by
-                  apply Prod.ext
-                  · exact h_eq1
-                  · exact h_eq2
-                exact h_bc1_ne_bc2 h_bc1_eq_bc2
-
-          -- Second, both ends cannot be equal in f either
-          have h_proof_oneeq_otherneq_f :
-            (fq bc1.1 = fq bc2.1 → fq bc1.2 ≠ fq bc2.2) ∧
-            (fq bc1.2 = fq bc2.2 → fq bc1.1 ≠ fq bc2.1) := by
-            constructor
-            · intro h_eq1
-              by_contra h_eq2
-              have h_bc1_eq_bc2 : bc1 = bc2 := by
-                apply Prod.ext
-                · exact (h_id_cons_strict_q bc1.1 bc2.1).mpr h_eq1
-                · exact (h_id_cons_strict_q bc1.2 bc2.2).mpr h_eq2
-              exact h_bc1_ne_bc2 h_bc1_eq_bc2
-            · intro h_eq2
-              by_contra h_eq1
-              have h_bc1_eq_bc2 : bc1 = bc2 := by
-                apply Prod.ext
-                · exact (h_id_cons_strict_q bc1.1 bc2.1).mpr h_eq1
-                · exact (h_id_cons_strict_q bc1.2 bc2.2).mpr h_eq2
-              exact h_bc1_ne_bc2 h_bc1_eq_bc2
-
-          -- Therefore, one of the endpoints is in the other's interval
-          have h_one_is_in_f :
-            (fq bc1.1 < fq bc2.1 ∧ fq bc2.1 < fq bc1.2) ∨
-            (fq bc1.1 < fq bc2.2 ∧ fq bc2.2 < fq bc1.2) ∨
-            (fq bc2.1 < fq bc1.1 ∧ fq bc1.1 < fq bc2.2) ∨
-            (fq bc2.1 < fq bc1.2 ∧ fq bc1.2 < fq bc2.2) := by
-              have ha1 := Set.mem_Ioo.mp h_a_in_Ioo1
-              have ha2 := Set.mem_Ioo.mp h_a_in_Ioo2
-              exact interval_endpoint_inside_of_intersection ha1 ha2 h_proof_oneeq_otherneq_f
-
-          -- Therefore, there is an element of A in the interval
-          have h_one_is_in :
-            (bc2.1 ≽[rq] bc1.1 ∧ bc1.2 ≽[rq] bc2.1) ∨
-            (bc2.2 ≽[rq] bc1.1 ∧ bc1.2 ≽[rq] bc2.2) ∨
-            (bc1.1 ≽[rq] bc2.1 ∧ bc2.2 ≽[rq] bc1.1) ∨
-            (bc1.2 ≽[rq] bc2.1 ∧ bc2.2 ≽[rq] bc1.2) := by
-              simpa [h_ord_cons_strict_q] using h_one_is_in_f
-
-          -- This contradicts the proprty of (b,c) ∈ K that they are empty of other f(a)
-          have cont_fbc_empty {bc a} (hK : bc ∈ K)
-            (h_in : a ∈ QuotSet) (h_rq : rq a bc.1 ∧ rq bc.2 a)
-            (h_fbc_empty : ∀ bc ∈ K, ¬∃ a ∈ QuotSet, rq bc.2 a ∧ rq a bc.1) :
-            False :=
-            (h_fbc_empty bc hK) ⟨a, h_in, h_rq.right, h_rq.left⟩
-
-          cases h_one_is_in with
-          | inl h_bc2a1_bc1a1 =>
-              exact cont_fbc_empty h_bc1_in_K (by trivial) h_bc2a1_bc1a1 h_fbc_empty_fa
-          | inr h_rest =>
-              cases h_rest with
-              | inl h_bc2a2_bc1a1 =>
-                  exact cont_fbc_empty h_bc1_in_K (by trivial) h_bc2a2_bc1a1 h_fbc_empty_fa
-              | inr h_rest2 =>
-                  cases h_rest2 with
-                  | inl h_bc1a1_bc2a1 =>
-                      exact cont_fbc_empty h_bc2_in_K (by trivial) h_bc1a1_bc2a1 h_fbc_empty_fa
-                  | inr h_bc1a2_bc2a1 =>
-                      exact cont_fbc_empty h_bc2_in_K (by trivial) h_bc1a2_bc2a1 h_fbc_empty_fa
-
-        -- Show that since each (b,c) ∈ K defines (f(b),f(c)) as
-        -- an open, non-empty, disjoint intervals in ℝ,
-        -- then K is countable
-        let s : IndiffQuot rs × IndiffQuot rs → Set ℝ := fun bc => Set.Ioo (fq bc.1) (fq bc.2)
-        have h_fbfc_open: ∀ bc ∈ K, IsOpen (s bc) := by
-          intro bc h_bc
-          exact isOpen_Ioo
-        have h_fbfc_nonempty : ∀ bc ∈ K, (s bc).Nonempty := by
-          intro bc h_bc
-          rcases h_bc with ⟨h_b1_notin_A, h_b2_notin_A, h_b2_ge_b1, h_no_a_in_A⟩
-          have h_fbc2_gt_fbc1 : fq bc.2 > fq bc.1 := by
-            exact (h_ord_cons_strict_q bc.2 bc.1).mp h_b2_ge_b1
-          exact Set.nonempty_Ioo.2 h_fbc2_gt_fbc1
-        exact Set.PairwiseDisjoint.countable_of_isOpen h_fbfc_disjoint h_fbfc_open h_fbfc_nonempty
-
-      -- Define B
-      let B : Set (IndiffQuot rs) :=
-        { b | ∃ c ∈ QuotSet, ((b, c) ∈ K ∨ (c, b) ∈ K) }
-
-      -- Show that B is countable
-      have h_B_countable : Countable B := by
-        -- Define subsets of B
-        let Bl : Set (IndiffQuot rs) :=
-          { b | ∃ c ∈ QuotSet, (b, c) ∈ K }
-        let Br : Set (IndiffQuot rs) :=
-          { b | ∃ c ∈ QuotSet, (c, b) ∈ K }
-        -- Show they are countable as images of K
-        have h_Bl_countable : Countable Bl := by
-          let f_Bl : IndiffQuot rs × IndiffQuot rs → IndiffQuot rs := fun bc => bc.1
-          have h_img_fbl_count := Set.Countable.image h_K_countable f_Bl
-          have h_Bl_img : Bl = f_Bl '' K := by
-            ext b
-            constructor
-            · rintro ⟨c, h_c_in_QuotSet, h_bc_in_K⟩
-              exact ⟨(b, c), h_bc_in_K, rfl⟩
-            · rintro ⟨⟨b, c⟩, h_bc_in_K, rfl⟩
-              exact ⟨c,Set.mem_of_mem_diff h_bc_in_K.2.1, h_bc_in_K⟩
-          rw [←h_Bl_img] at h_img_fbl_count
-          exact h_img_fbl_count
-        have h_Br_countable : Countable Br := by
-          let f_Br : IndiffQuot rs × IndiffQuot rs → IndiffQuot rs := fun bc => bc.2
-          have h_img_fbr_count := Set.Countable.image h_K_countable f_Br
-          have h_Br_img : Br = f_Br '' K := by
-            ext b
-            constructor
-            · rintro ⟨c, h_c_in_QuotSet, h_cb_in_K⟩
-              exact ⟨(c, b), h_cb_in_K, rfl⟩
-            · rintro ⟨⟨c, b⟩, h_cb_in_K, rfl⟩
-              exact ⟨c, Set.mem_of_mem_diff h_cb_in_K.1, h_cb_in_K⟩
-          rw [←h_Br_img] at h_img_fbr_count
-          exact h_img_fbr_count
-        -- Finally, B is the union of both
-        have h_B_union : B = Bl ∪ Br := by
-          ext b
-          constructor
-          · rintro ⟨c, h_c_in_QuotSet, h_bc_in_K_or_cb_in_K⟩
-            cases h_bc_in_K_or_cb_in_K with
-            | inl h_bc_in_K => exact Or.inl ⟨c, h_c_in_QuotSet, h_bc_in_K⟩
-            | inr h_cb_in_K => exact Or.inr ⟨c, h_c_in_QuotSet, h_cb_in_K⟩
-          · rintro h_b_in_Bl_or_Br
-            cases h_b_in_Bl_or_Br with
-            | inl h_b_in_Bl =>
-                rcases h_b_in_Bl with ⟨c, h_c_in_QuotSet, h_bc_in_K⟩
-                exact ⟨c, h_c_in_QuotSet, Or.inl h_bc_in_K⟩
-            | inr h_b_in_Br =>
-                rcases h_b_in_Br with ⟨c, h_c_in_QuotSet, h_cb_in_K⟩
-                exact ⟨c, h_c_in_QuotSet, Or.inr h_cb_in_K⟩
-        rw [h_B_union]
-        exact Set.Countable.union h_Bl_countable h_Br_countable
-
-      -- Define our final dense set D
-      let D : Set (IndiffQuot rs) := A ∪ B
-
-      -- Show that D is countable
-      have h_D_countable : Countable D := by
-        exact Set.Countable.union h_A_countable h_B_countable
-
-      -- Show that D is dense
-      have h_D_dense : order_dense D rq := by
-        intro c b h_cb
-        rcases h_cb with ⟨h_rcb, h_c_notin_D, h_b_notin_D⟩
-        -- b, c ∉ D implies b, c ∉ A and ∉ B
-        have h_b_notin_A : b ∉ A := by
-          intro h_b_in_A
-          exact h_b_notin_D (Set.mem_union_left B h_b_in_A)
-        have h_c_notin_A : c ∉ A := by
-          intro h_c_in_A
-          exact h_c_notin_D (Set.mem_union_left B h_c_in_A)
-        have h_b_notin_B : b ∉ B := by
-          intro h_b_in_B
-          exact h_b_notin_D (Set.mem_union_right A h_b_in_B)
-        have h_c_notin_B : c ∉ B := by
-          intro h_c_in_B
-          exact h_c_notin_D (Set.mem_union_right A h_c_in_B)
-        -- From b, c ∉ A we have that b, c ∈ QuotSet \ A
-        have h_b_in_QuotSet_diff_A : b ∈ QuotSet \ A := by
-          exact ⟨by trivial, h_b_notin_A⟩
-        have h_c_in_QuotSet_diff_A : c ∈ QuotSet \ A := by
-          exact ⟨by trivial, h_c_notin_A⟩
-        -- From b, c ∉ B we have that (b, c) ∉ K
-        have h_bc_notin_K : (b, c) ∉ K := by
-          intro h_bc_in_K
-          exact h_b_notin_B ⟨c, Set.mem_of_mem_diff h_bc_in_K.2.1, Or.inl h_bc_in_K⟩
-        -- Therefore, there is d ∈ D such that c ≽[rq] d ≽[rq] b
-        -- If there was no such d, then there would be no a ∈ A such that c ≽[rq] a ≽[rq] b
-        -- and then (b, c) ∈ K contradicting previous
-        by_contra h_no_d_in_D
-        have h_no_a_in_A : ∀ a ∈ A, ¬ (c ≽[rq] a ∧ a ≽[rq] b) := by
-          intro a h_a_in_A ⟨h_c_ge_a, h_a_ge_b⟩
-          exact h_no_d_in_D ⟨a, (Set.mem_union_left B h_a_in_A), ⟨h_c_ge_a, h_a_ge_b⟩⟩
-        have h_bc_in_K : (b, c) ∈ K := by
-          exact ⟨h_b_in_QuotSet_diff_A, h_c_in_QuotSet_diff_A, h_rcb, by simpa using h_no_a_in_A⟩
-        exact h_bc_notin_K h_bc_in_K
-
-      -- So D is the required dense countable set, and it is order separable
-      exact ⟨D, h_D_countable, h_D_dense⟩
-
+Proof from: Fishburn (1970) "Utility Theory for Decision Making" Theorem 3.1. -/
+theorem fishburn_theorem (rs : Relation α) :
+    (∃ h : WeakOrder rs, OrderSeparable (IndiffQuotRel rs h))
+    ↔ ∃ f : α → ℝ, OrdinalConsistentStrict f rs := by
+  constructor
+  · -- ===== Forward direction: weak order ∧ order_separable → ∃ function =====
+    intro hex
+    rcases hex with ⟨hwo, hsep⟩
+    exact exists_ordinalConsistentStrict_of_orderSeparable hwo hsep
+  · -- ===== Backward direction: ∃ function → weak order ∧ order_separable =====
+    intro hex
+    rcases hex with ⟨f, hocs⟩
+    have hwo := weakOrder_of_ordinalConsistentStrict hocs
+    have hsep := orderSeparable_of_ordinalConsistentStrict hocs hwo
     -- Finally, we have that is weak order and order separable,
     -- and we are done with the backward direction
-    exact ⟨h_weak_order, h_order_separable⟩
+    exact ⟨hwo, hsep⟩
 
-/-
-Lemmas for the ordinal theorem
--/
-lemma weak_if_ordinal {r : Relation α} :
-  ordinal r → weak_order (strict r) := by
-  intro h_ordinal
-  -- Show that rs is a weak order from r being ordinal
-  have h_comp := h_ordinal.left
-  have h_trans := h_ordinal.right
-  have h_weak_order : weak_order (strict r) := by
-    constructor
-    · -- Asymmetry
-      intro x y h_xy h_yx
-      exact h_yx.right h_xy.left
-    · -- Negative transitivity
-      -- We get y ≽ x and z ≽ y from the negations
-      intro x y z h_not h_xz
-      rcases h_not with ⟨h_not_xy, h_not_yz⟩
-      have h_yx : y ≽[r] x := by
-        rcases not_and_or.mp h_not_xy with h_nxy | h_nnyx
-        · cases h_comp x y with
-          | inl h_xy => cases h_nxy h_xy
-          | inr h_yx => exact h_yx
-        · exact not_not.mp h_nnyx
-      have h_zy : z ≽[r] y := by
-        rcases not_and_or.mp h_not_yz with h_nyz | h_nzy
-        · cases h_comp y z with
-          | inl h_yz => cases h_nyz h_yz
-          | inr h_zy => exact h_zy
-        · exact not_not.mp h_nzy
-      -- Apply transitivity to get z ≽ x and contradiction with x > z
-      exact h_xz.right (h_trans z y x ⟨h_zy, h_yx⟩)
-  exact h_weak_order
+end Fishburn
 
-lemma c_weak_iff_ordinal {r : Relation α} :
-  completeness r → (ordinal r ↔ weak_order (strict r)) := by
-  intro h_compl
-  apply Iff.intro
-  · -- Forward direction: ordinal r → weak_order (strict r)
-    -- Always true, without completeness
-    intro h_ordinal
-    exact weak_if_ordinal h_ordinal
-  · -- Backward direction: weak_order (strict r) → ordinal r
-    intro h_weak_order
-    rcases h_weak_order with ⟨h_asym, h_neg_trans⟩
-    constructor
-    · -- Completeness
-      exact h_compl
-    · -- Transitivity
-      intro x y z h_xyz
-      rcases h_xyz with ⟨h_xy, h_yz⟩
-      have h_nzy : ¬(z ≻[r] x) := by
-        have h_nyx : ¬(y ≻[r] x) := by
-          intro h_yx
-          exact h_yx.right h_xy
-        have h_nzy : ¬(z ≻[r] y) := by
-          intro h_zy
-          exact h_zy.right h_yz
-        exact h_neg_trans z y x ⟨h_nzy, h_nyx⟩
-      cases not_and_or.mp h_nzy with
-      | inl h_nzx =>
-        cases (h_compl z x) with
-        | inl h_zx => exact absurd h_zx h_nzx
-        | inr h_xz => exact h_xz
-      | inr h_nnxz => exact not_not.mp h_nnxz
+section Ordinal
 
+/-! ## The ordinal theorem -/
 
-lemma strict_ordinal_consistent_if_consistent {r : Relation α} {f : α → ℝ} :
-  ordinal_consistent f r → ordinal_consistent_strict f (strict r) := by
-  intro h_ord_consistency x y
-  apply Iff.intro
-  · -- x ≻[r] y → f x > f y
-    intro h_xy
-    have h_nfy_ge_fx : ¬(f y ≥ f x) := by
-      intro h_fy_ge_fx
-      have h_yx : y ≽[r] x := (h_ord_consistency y x).mpr h_fy_ge_fx
-      exact h_xy.right h_yx
-    exact lt_of_not_ge h_nfy_ge_fx
-  · -- f x > f y → x ≻[r] y
-    intro h_fx_g_fy
-    have h_nyx : ¬(y ≽[r] x) := by
-      intro h_yx
-      have h_fy_ge_fx := (h_ord_consistency y x).mp h_yx
-      exact not_lt.mpr h_fy_ge_fx h_fx_g_fy
-    have h_xy : x ≽[r] y := (h_ord_consistency x y).mpr (le_of_lt h_fx_g_fy)
-    exact ⟨h_xy, h_nyx⟩
-
-lemma c_strict_ordinal_consistent_iff_consistent {r : Relation α} {f : α → ℝ} :
-  completeness r → (ordinal_consistent f r ↔ ordinal_consistent_strict f (strict r)) := by
-  intro h_compl
-  apply Iff.intro
-  · -- Forward direction: ordinal_consistent f r → ordinal_consistent_strict f (strict r)
-    -- Always true, without completeness
-    intro h_ord_consistency
-    exact strict_ordinal_consistent_if_consistent h_ord_consistency
-  · -- Backward direction: ordinal_consistent_strict f (strict r) → ordinal_consistent f r
-    intro h_ord_consistency_strict x y
-    apply Iff.intro
-    · -- x ≽[r] y → f x ≥ f y
-      intro h_xy
-      have h_ny_g_x : ¬ (y ≻[r] x) := by
-        intro h_yx
-        exact h_yx.right h_xy
-      have h_yx : ¬ (f y > f x) := by
-        intro h_fy_gt_fx
-        exact h_ny_g_x ((h_ord_consistency_strict y x).mpr h_fy_gt_fx)
-      exact le_of_not_gt h_yx
-    · -- f x ≥ f y → x ≽[r] y
-      intro h_fx_ge_fy
-      have h_ny_g_x : ¬ (y ≻[r] x) := by
-        intro h_yx
-        have h_fy_gt_fx := (h_ord_consistency_strict y x).mp h_yx
-        exact not_le.mpr h_fy_gt_fx h_fx_ge_fy
-      cases not_and_or.mp h_ny_g_x with
-      | inl h_nyx =>
-        cases (h_compl x y) with
-        | inl h_xy => exact h_xy
-        | inr h_yx => exact absurd h_yx h_nyx
-      | inr h_nnxy => exact not_not.mp h_nnxy
-
-/-
-Main Ordinal Theorem: A preference relation on a set satisfies
-completeness and transitivity, and its order separable on the quotient induced
-if and only if there exists a ordinal consistent function f : Set → ℝ.
--/
+/-- Main ordinal theorem (≽ complete ∧ transitive ∧ X/∼ order separable ⇔
+∃ f : X → ℝ with x ≽ y ⇔ f(x) ≥ f(y)):
+`(∃ h : ordinal r, order_separable (IndiffQuotRel (strict r) (weak_if_ordinal h))) ↔
+∃ f : α → ℝ, ordinal_consistent f r`. -/
 theorem ordinal_theorem (r : Relation α) :
-  (∃ h : ordinal r, order_separable (IndiffQuotRel (strict r) (weak_if_ordinal h)))
-    ↔ ∃ f : α → ℝ, ordinal_consistent f r := by
-  apply Iff.intro
-  · -- Forward direction: ordinal axioms ∧ order_separable → ∃ function
-    intro h
-    rcases h with ⟨h_ordinal, h_order_sep⟩
-    let h_comp := h_ordinal.left
+    (∃ h : Ordinal r, OrderSeparable (IndiffQuotRel (Strict r) (weakOrder_of_ordinal h)))
+    ↔ ∃ f : α → ℝ, OrdinalConsistent f r := by
+  constructor
+  · -- ===== Forward direction: ordinal axioms ∧ order_separable → ∃ function =====
+    intro hex
+    rcases hex with ⟨hord, hsep⟩
+    have hcompl := hord.left
     -- r is ordinal → strict r is weak order
-    have h_weak_order := weak_if_ordinal h_ordinal
+    have hwo := weakOrder_of_ordinal hord
     -- Apply Fishburn theorem to strict r
-    have h_f_strict : ∃ f : α → ℝ, ordinal_consistent_strict f (strict r) :=
-      (Fishburn_theorem (strict r)).mp ⟨h_weak_order, h_order_sep⟩
+    have hexf : ∃ f : α → ℝ, OrdinalConsistentStrict f (Strict r) :=
+      (fishburn_theorem (Strict r)).mp ⟨hwo, hsep⟩
     -- Strict ordinal consistency ↔ ordinal consistency
-    rcases h_f_strict with ⟨f, h_ord_cons_strict⟩
-    have h_ord_cons : ordinal_consistent f r :=
-      (c_strict_ordinal_consistent_iff_consistent h_comp).mpr h_ord_cons_strict
-    exact ⟨f, h_ord_cons⟩
-  · -- Backward direction: ∃ function → ordinal axioms ∧ order_separable
-    intro h_exists
-    rcases h_exists with ⟨f, h_ord_cons⟩
+    rcases hexf with ⟨f, hocs⟩
+    have hoc : OrdinalConsistent f r :=
+      (ordinalConsistent_iff_ordinalConsistentStrict_of_completeness hcompl).mpr hocs
+    exact ⟨f, hoc⟩
+  · -- ===== Backward direction: ∃ function → ordinal axioms ∧ order_separable =====
+    intro hex
+    rcases hex with ⟨f, hoc⟩
     -- ∃ f → r is complete
-    have h_comp : completeness r := by
+    have hcompl : Completeness r := by
       intro x y
-      by_cases h_fx_ge_fy : f x ≥ f y
+      by_cases hfxy : f x ≥ f y
       · -- f x ≥ f y
-        apply Or.inl
-        exact (h_ord_cons x y).mpr h_fx_ge_fy
+        exact Or.inl ((hoc x y).mpr hfxy)
       · -- ¬(f x ≥ f y) → f y > f x
-        apply Or.inr
-        exact (h_ord_cons y x).mpr (le_of_not_ge h_fx_ge_fy)
+        exact Or.inr ((hoc y x).mpr (le_of_not_ge hfxy))
     -- r complete → (f ordinal consistent → f strict r ordinal consistent)
-    have h_ord_cons_strict : ordinal_consistent_strict f (strict r) :=
-      strict_ordinal_consistent_if_consistent h_ord_cons
+    have hocs : OrdinalConsistentStrict f (Strict r) :=
+      ordinalConsistentStrict_of_ordinalConsistent hoc
     -- Apply Fishburn theorem to get weak order and order separable
-    have h_fishburn : ∃ h : weak_order (strict r), order_separable (IndiffQuotRel (strict r) h) :=
-      (Fishburn_theorem (strict r)).mpr ⟨f, h_ord_cons_strict⟩
-    rcases h_fishburn with ⟨h_weak_order, h_order_sep⟩
-    -- r complete → (strict r wak order → r ordinal)
-    have h_ordinal : ordinal r := (c_weak_iff_ordinal h_comp).mpr h_weak_order
-    exact ⟨h_ordinal, h_order_sep⟩
+    have hfishburn : ∃ h : WeakOrder (Strict r), OrderSeparable (IndiffQuotRel (Strict r) h) :=
+      (fishburn_theorem (Strict r)).mpr ⟨f, hocs⟩
+    rcases hfishburn with ⟨hwo, hsep⟩
+    -- r complete → (strict r weak order → r ordinal)
+    have hord : Ordinal r := (ordinal_iff_weakOrder_of_completeness hcompl).mpr hwo
+    exact ⟨hord, hsep⟩
+
+end Ordinal
 
 end OrdinalRep

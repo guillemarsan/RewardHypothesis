@@ -287,7 +287,7 @@ def p_linear [MixSpace α] (u : α → ℝ) : Prop :=
   ∀ x y : α, ∀ p : IntervalType, u (x +[p] y) = p.1 * u x + (1 - p.1) * u y
 
 def utility_function [MixSpace α] (u : α → ℝ) (r : Relation α) : Prop :=
-  ordinal_consistent u r ∧ p_linear u
+  OrdinalConsistent u r ∧ p_linear u
 
 
 /-
@@ -302,8 +302,8 @@ def continuity [MixSpace α] (r : Relation α) : Prop :=
   ∀ x y z : α, (x ≽[r] y ∧ y ≽[r] z) → ∃ p : IntervalType, (x +[p] z) ∼[r] y
 
 def vNM_axioms [MixSpace α] (r : Relation α) : Prop :=
-  completeness r ∧
-  transitivity r ∧
+  Completeness r ∧
+  Transitivity r ∧
   independence r ∧
   continuity r
 
@@ -312,7 +312,7 @@ Lemmas for the proof of the vNM theorem
 -/
 
 lemma full_indep_if_indep_and_comp [MixSpace α] (r : Relation α) :
-  completeness r ∧ independence r → ∀ x y : α, (x ≽[r] y) →
+  Completeness r ∧ independence r → ∀ x y : α, (x ≽[r] y) →
   ∀ z : α, ∀ p : IntervalType, (x +[p] z) ≽[r] (y +[p] z) := by
   intro h_r_char x y hxy z p
   rcases h_r_char with ⟨h_completeness, h_indep⟩
@@ -334,7 +334,7 @@ lemma full_indep_if_indep_and_comp [MixSpace α] (r : Relation α) :
     exact hzz
 
 lemma full_indiff_indep [MixSpace α] (r : Relation α) :
-  completeness r ∧ independence r →
+  Completeness r ∧ independence r →
   ∀ x y : α, (x ∼[r] y) → ∀ z : α, ∀ p : IntervalType, (x +[p] z) ∼[r] (y +[p] z) := by
   intro h_r_char x y
   have h_full_indep := full_indep_if_indep_and_comp r h_r_char
@@ -347,7 +347,7 @@ lemma full_indiff_indep [MixSpace α] (r : Relation α) :
 
 
 lemma full_indiff_interior [MixSpace α] (r : Relation α) :
-  completeness r ∧ independence r →
+  Completeness r ∧ independence r →
   ∀ x y : α, (x ∼[r] y) → ∀ p : IntervalType, (x ∼[r] (x +[p] y)) ∧ ((x +[p] y) ∼[r] y) := by
   intro h_r_char x y hxy p
   have h_full_indep := full_indiff_indep r h_r_char
@@ -367,7 +367,7 @@ lemma full_indiff_interior [MixSpace α] (r : Relation α) :
   exact ⟨h2, h1⟩
 
 lemma full_partial_interior [MixSpace α] (r : Relation α) :
-  completeness r ∧ independence r → ∀ x y : α, (x ≽[r] y) →
+  Completeness r ∧ independence r → ∀ x y : α, (x ≽[r] y) →
   ∀ p : IntervalType, (x ≽[r] (x +[p] y)) ∧ ((x +[p] y) ≽[r] y) := by
   intro h_r_char x y hxy p
   have h_full_independence := full_indep_if_indep_and_comp r h_r_char
@@ -463,7 +463,7 @@ lemma strict_interior [MixSpace α] (r : Relation α) :
 
 
 lemma strict_p_consistency [MixSpace α] (r : Relation α) :
-  completeness r ∧ independence r →
+  Completeness r ∧ independence r →
   ∀ x y : α, (x ≻[r] y) → (∀ p q : IntervalType, ((x+[p]y) ≻[r] (x+[q]y)) ↔ p.1 > q.1) := by
   intro h_r_chars x y hxy p q
   rcases h_r_chars with ⟨h_complete, h_independence⟩
@@ -796,7 +796,7 @@ lemma unique_continuity [MixSpace α] (r : Relation α) :
         x y z ⟨h_xy_gt, h_yz_gt⟩
 
 lemma strict_substitution (r : Relation α) :
-  transitivity r → ∀ x y u v : α, (u ∼[r] x ∧ v ∼[r] y) → ((x ≻[r] y) ↔ u ≻[r] v) := by
+  Transitivity r → ∀ x y u v : α, (u ∼[r] x ∧ v ∼[r] y) → ((x ≻[r] y) ↔ u ≻[r] v) := by
   intro h_trans x y u v h_uxvy
   have h_one_direction : ∀ (x y u v: α), (u ∼[r] x ∧ v ∼[r] y) → ((x ≻[r] y) → u ≻[r] v) := by
     intro x y u v h_uv h_xy
@@ -822,7 +822,7 @@ lemma strict_substitution (r : Relation α) :
 
 
 lemma linear_substitution [MixSpace α] (r : Relation α) :
-  completeness r ∧ transitivity r ∧ independence r → ∀ x y u v : α, ∀ p q k : IntervalType,
+  Completeness r ∧ Transitivity r ∧ independence r → ∀ x y u v : α, ∀ p q k : IntervalType,
   (x ∼[r] u+[p]v) ∧ (y ∼[r] u +[q]v) →
   (x+[k]y) ∼[r] (u +[⟨k.1 * p.1 + (1 - k.1) * q.1, assoc_of_mix_in_Icc p.2 q.2 k.2⟩]v) := by
   intro h_r_chars x y u v p q k h_xu_vy
@@ -907,7 +907,7 @@ theorem vNM_theorem [MixSpace α] (r : Relation α) :
       -- Then u(x) = 0 for all x is a valid utility function
       have h_exists : ∃ u : α → ℝ, utility_function u r := by
         let u := fun x : α => (0 : ℝ)
-        have hu_ord : ordinal_consistent u r := by
+        have hu_ord : OrdinalConsistent u r := by
           intro x y
           constructor
           · intro hxy
@@ -1504,10 +1504,10 @@ theorem vNM_theorem [MixSpace α] (r : Relation α) :
       let u (x : α) : ℝ := (u_const x).eval.eval
 
       -- Show that u is ordinal consistent
-      have hu_ord_cons : ordinal_consistent u r := by
+      have hu_ord_cons : OrdinalConsistent u r := by
 
         -- First gonna show it is strict ordinal consistent
-        have hu_strict_ord_cons : ordinal_consistent_strict u (strict r) := by
+        have hu_strict_ord_cons : OrdinalConsistentStrict u (Strict r) := by
           intro x y
           -- The biggest challenge is that each u x and u y are picking different a and b
           -- so we need to get a3 and b3 to compute M3(x) and M3(y) and compare it there
@@ -1599,7 +1599,8 @@ theorem vNM_theorem [MixSpace α] (r : Relation α) :
           exact h_xy_iff_M3
 
         -- Now show ordinal consistency from strict ordinal consistency
-        exact (c_strict_ordinal_consistent_iff_consistent h_complete).mpr hu_strict_ord_cons
+        exact (ordinalConsistent_iff_ordinalConsistentStrict_of_completeness h_complete).mpr
+          hu_strict_ord_cons
 
       -- Show that u is p-linear
       have hu_plin : p_linear u := by
@@ -1711,14 +1712,14 @@ theorem vNM_theorem [MixSpace α] (r : Relation α) :
     rintro ⟨u, hu_ord_cons, hu_plin⟩
     -- Show vNM axioms
     have h_vNM : vNM_axioms r := by
-      have h_complete : completeness r := by
+      have h_complete : Completeness r := by
         intro x y
         have h_either : u x ≥ u y ∨ u y ≥ u x := by
           exact le_total (u y) (u x)
         cases h_either with
         | inl h_xy => exact Or.inl ((hu_ord_cons x y).mpr h_xy)
         | inr h_yx => exact Or.inr ((hu_ord_cons y x).mpr h_yx)
-      have h_trans : transitivity r := by
+      have h_trans : Transitivity r := by
         intro x y z hxyz
         rcases hxyz with ⟨hx_y, hy_z⟩
         have h_xy : u x ≥ u y := (hu_ord_cons x y).mp hx_y
@@ -1826,7 +1827,7 @@ theorem utility_gen [MixSpace α] (r : Relation α) {u1 : α → ℝ}
   intro a b u2 h_conds
   rcases h_conds with ⟨h_a_pos, h_u2_def⟩
   -- Show that u2 is ordinal consistent
-  have hu2_ord_cons : ordinal_consistent u2 r := by
+  have hu2_ord_cons : OrdinalConsistent u2 r := by
     intro x y
     have h_u1_ord_cons := h1.left
     have h_u1_xy : u1 x ≥ u1 y ↔ x ≽[r] y := by
