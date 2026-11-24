@@ -1,396 +1,414 @@
 /-
-Copyright (c) 2026 Guillermo Martín-Sanchez . All rights reserved.
+Copyright (c) 2026 Guillermo Martín-Sánchez. All rights reserved.
 Released under Apache 2.0 license as described in the file LICENSE.
 Authors: Guillermo Martín-Sánchez
 -/
-
-
 import RewardHypothesis.vNM
 
-/-
+/-!
+# Markov reward theorem
+
 Define a concatenable mixture space and the γ-indifference axiom.
-Then, state and prove Markov reward theorem: vNM axioms and γ-indifference
-are equivalent to the existence of a markov reward function.
+Then, state and prove the Markov reward theorem: vNM axioms and γ-indifference
+are equivalent to the existence of a Markov reward function.
 -/
+
 namespace Reward
-open OrdinalRep
-open Utility
 
-/-
-Lemma for the γ-indifference axiom
--/
+open OrdinalRep Utility
 
-lemma indiff_in_Icc (hg : g ∈ Set.Icc (0 : ℝ) 1) : 1/(g+1) ∈ Set.Icc (0 : ℝ) 1 :=
-  by
-    rcases hg with ⟨hg0, hg1⟩
-    have hdenom_pos : 0 < g + 1 := by
-        linarith
-    constructor
-    · exact (le_of_lt (div_pos zero_lt_one hdenom_pos))
-    · have hdenom_ge_one : 1 ≤ g + 1 := by
-        linarith
-      have hdenom_pos : 0 < g + 1 := by
-        linarith
-      apply (div_le_one hdenom_pos).mpr hdenom_ge_one
+variable {α : Type} {g : ℝ}
 
-/-
-Define ConcatMixtureSpace with the T-concatenation operation with its axioms
--/
+section ConcatMixSpace
 
+/-! ## Concatenable mixture spaces -/
+
+/-- Elements of T as a type (t ∈ T): `UniType T := {t : α // t ∈ T}`. -/
 def UniType (T : Set α) : Type :=
-  { t : α // t ∈ T }
+  {t : α // t ∈ T}
 
+/-- Concatenable mixture space, a mixture space with the T-concatenation operation and its
+axioms (t ⊕ x for t ∈ T, and ε with t ⊕ ε = t):
+`concat : UniType T → α → α`, `concat_idempotent : concat t ε = t.1`. -/
 class ConcatMixSpace (α : Type) extends MixSpace α where
   T : Set α
-  concat :
-    UniType T → α → α
+  concat : UniType T → α → α
+  ε : α
+  concat_idempotent : ∀ (t : UniType T), concat t ε = t.1
 
-  ε: α
-  concat_idempotent :
-    ∀ (t : UniType T), concat t ε = t.1
+notation lhs " ⊕ " rhs:50 => ConcatMixSpace.concat lhs rhs
 
-notation lhs "⊕" rhs:50 => ConcatMixSpace.concat lhs rhs
+end ConcatMixSpace
 
-/-
-Define what it means for a function to be a reward function.
--/
+section RewardFunctions
 
-def markov_recursive [inst : ConcatMixSpace α] (u : α → ℝ) : Prop :=
+/-! ## Reward functions and axioms -/
+
+/-! ### Reward functions -/
+
+/-- u Markov recursive (∃ γ : T → [0, 1] with u(t ⊕ x) = u(t) + γ(t) u(x) ∧ u(ε) = 0):
+`∃ γ, ∀ x t, (u (t ⊕ x) = u t.1 + (γ t).1 * u x) ∧ u inst.ε = 0`. -/
+def MarkovRecursive [inst : ConcatMixSpace α] (u : α → ℝ) : Prop :=
   ∃ γ : UniType inst.T → IntervalType, ∀ x : α, ∀ t : UniType inst.T,
-  (u (t ⊕ x) = u t.1 + (γ t).1 * u x) ∧ (u (inst.ε)) = 0
+    (u (t ⊕ x) = u t.1 + (γ t).1 * u x) ∧ u inst.ε = 0
 
-def reward_function [ConcatMixSpace α] (u : α → ℝ) (r : Relation α) : Prop :=
-  OrdinalConsistent u r ∧ p_linear u ∧ markov_recursive u
+/-- What it means for a function to be a reward function
+(u ordinal consistent ∧ p-linear ∧ Markov recursive):
+`OrdinalConsistent u r ∧ p_linear u ∧ MarkovRecursive u`. -/
+def RewardFunction [ConcatMixSpace α] (u : α → ℝ) (r : Relation α) : Prop :=
+  OrdinalConsistent u r ∧ p_linear u ∧ MarkovRecursive u
 
+/-! ### Axioms for Markov reward
 
-/-
-Define the axiom for markov reward on a preference relation.
+Define the axioms for Markov reward on a preference relation.
 -/
 
-def dynamic_consistency [inst : ConcatMixSpace α] (r : Relation α) : Prop :=
+/-! #### Lemma for the γ-indifference axiom -/
+
+/-- g ∈ [0, 1] ⇒ 1/(g + 1) ∈ [0, 1]:
+`g ∈ Set.Icc (0 : ℝ) 1 → 1/(g+1) ∈ Set.Icc (0 : ℝ) 1`. -/
+lemma indiff_in_Icc (hg : g ∈ Set.Icc (0 : ℝ) 1) : 1/(g+1) ∈ Set.Icc (0 : ℝ) 1 := by
+  rcases hg with ⟨hg0, _⟩
+  have hdenom : 0 < g + 1 := by
+    linarith
+  constructor
+  · -- 0 ≤ 1/(g+1)
+    exact le_of_lt (div_pos zero_lt_one hdenom)
+  · -- 1/(g+1) ≤ 1
+    have hge : 1 ≤ g + 1 := by
+      linarith
+    exact (div_le_one hdenom).mpr hge
+
+/-! #### Dynamic consistency and γ-indifference -/
+
+/-- Dynamic consistency (x ≽ y ⇒ t ⊕ x ≽ t ⊕ y):
+`∀ x y t, (x ≽[r] y) → (t ⊕ x) ≽[r] (t ⊕ y)`. -/
+def DynamicConsistency [inst : ConcatMixSpace α] (r : Relation α) : Prop :=
   ∀ x y : α, ∀ t : UniType inst.T, (x ≽[r] y) → (t ⊕ x) ≽[r] (t ⊕ y)
 
-def γ_indifference [inst : ConcatMixSpace α] (r : Relation α) : Prop :=
+/-- γ-indifference (∃ γ : T → [0, 1] with (t ⊕ x) +[p] y ∼ (t ⊕ y) +[p] x, p = 1/(γ(t) + 1)):
+`∃ γ, ∀ x y t, ((t ⊕ x) +[pγ] y) ∼[r] ((t ⊕ y) +[pγ] x)`, `pγ := 1/((γ t).1 + 1)`. -/
+def γIndifference [inst : ConcatMixSpace α] (r : Relation α) : Prop :=
   ∃ γ : UniType inst.T → IntervalType, ∀ x y : α, ∀ t : UniType inst.T,
     let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_in_Icc (γ t).2⟩
-    ((t ⊕ x)+[pγ]y) ∼[r] ((t ⊕ y)+[pγ]x)
+    ((t ⊕ x) +[pγ] y) ∼[r] ((t ⊕ y) +[pγ] x)
 
-/-
-vNM → (γ-indifference → dynamic consistency)
--/
+end RewardFunctions
 
-theorem dc_if_γ_indiff [ConcatMixSpace α] (r : Relation α) :
-  vNM_axioms r → (γ_indifference r → dynamic_consistency r):= by
-  intro h_vNM h_γ_indiff
-  rcases h_γ_indiff with ⟨γ, h_γ_indiff⟩
-  intro x y t h_xy
+section DynamicConsistency
+
+/-! ## Dynamic consistency -/
+
+/-! ### vNM ⇒ (γ-indifference ⇒ dynamic consistency) -/
+
+/-- vNM ⇒ (γ-indifference ⇒ dynamic consistency):
+`vNM_axioms r → (γIndifference r → DynamicConsistency r)`. -/
+theorem dynamicConsistency_of_γIndifference [ConcatMixSpace α] (r : Relation α) :
+    vNM_axioms r → (γIndifference r → DynamicConsistency r) := by
+  intro hvNM hγindiff
+  rcases hγindiff with ⟨γ, hγindiff⟩
+  intro x y t hxy
+  -- ===== A utility function u representing r =====
   -- Make utility function u representing r
-  have h_u_exists := (vNM_theorem r).mp h_vNM
-  rcases h_u_exists with ⟨u, h_utility_function⟩
-  rcases h_utility_function with ⟨h_ordinal_consistent, h_p_linear⟩
+  have huexists := (vNM_theorem r).mp hvNM
+  rcases huexists with ⟨u, hutility⟩
+  rcases hutility with ⟨hoc, hplin⟩
+  -- ===== γ-indifference in terms of u =====
   -- Apply this in the γ-indifference property
   let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_in_Icc (γ t).2⟩
-  have h_γ_prop := h_γ_indiff x y t
+  have hγprop := hγindiff x y t
   -- Transform it into u
   -- u((t ⊕ x)+[pγ]y) = u((t ⊕ y)+[pγ]x)
-  have h_u_prop := by
-    have h_γ'_prop : ((t⊕x) +[pγ] y) ∼[r] ((t⊕y) +[pγ] x)  := by
-      exact h_γ_prop
-    have h_u_prop_geq := (h_ordinal_consistent ((t⊕x) +[pγ] y)
-     ((t⊕y) +[pγ] x)).mp h_γ'_prop.left
-    have h_u_prop_leq := (h_ordinal_consistent ((t⊕y) +[pγ] x)
-     ((t⊕x) +[pγ] y)).mp h_γ'_prop.right
-    have h_u_prop : u ((t⊕x) +[pγ] y) = u ((t⊕y) +[pγ] x) :=
-      le_antisymm h_u_prop_leq h_u_prop_geq
-    exact h_u_prop
+  have hueq := by
+    have hγprop' : ((t ⊕ x) +[pγ] y) ∼[r] ((t ⊕ y) +[pγ] x) := hγprop
+    have hge := (hoc ((t ⊕ x) +[pγ] y) ((t ⊕ y) +[pγ] x)).mp hγprop'.left
+    have hle := (hoc ((t ⊕ y) +[pγ] x) ((t ⊕ x) +[pγ] y)).mp hγprop'.right
+    have hueq : u ((t ⊕ x) +[pγ] y) = u ((t ⊕ y) +[pγ] x) := le_antisymm hle hge
+    exact hueq
   -- Use linear property to expand both sides
   -- pγ u(t ⊕ x) + (1 - pγ) u(y) = pγ u(t ⊕ y) + (1 - pγ) u(x)
-  have h_u_prop_lin : pγ.1 * u ((t⊕x)) + (1 - pγ.1) * u (y) =
-   pγ.1 * u ((t⊕y)) + (1 - pγ.1) * u (x) := by
-    rw [h_p_linear ((t⊕x)) (y) pγ] at h_u_prop
-    rw [h_p_linear ((t⊕y)) (x) pγ] at h_u_prop
-    exact h_u_prop
+  have hulin : pγ.1 * u (t ⊕ x) + (1 - pγ.1) * u y =
+      pγ.1 * u (t ⊕ y) + (1 - pγ.1) * u x := by
+    rw [hplin (t ⊕ x) y pγ] at hueq
+    rw [hplin (t ⊕ y) x pγ] at hueq
+    exact hueq
   -- Rearranging terms
   -- pγ (u(t ⊕ x) - u(t ⊕ y)) = (1 - pγ) (u(x) - u(y))
-  have h_u_rearranged : pγ.1 * (u (t⊕x) - u (t⊕y)) = (1 - pγ.1) * (u x - u y) := by
-    linarith [h_u_prop_lin]
+  have hurearr : pγ.1 * (u (t ⊕ x) - u (t ⊕ y)) = (1 - pγ.1) * (u x - u y) := by
+    linarith [hulin]
+  -- ===== Sign argument: u(t ⊕ x) - u(t ⊕ y) ≥ 0 =====
   -- Since x ≽[r] y, u(x) - u(y) ≥ 0
-  have h_u_xy_geq : u x - u y ≥ 0 := by
-    have h_ux_geq_uy := (h_ordinal_consistent x y).mp h_xy
+  have hdiffxy : u x - u y ≥ 0 := by
+    have huxy := (hoc x y).mp hxy
     linarith
   -- Also, pγ.1 > 0 and (1 - pγ.1) ≥ 0
-  have h_pγ_pos : pγ.1 > 0 := by
-    have h_gt_zero : 0 < (γ t).1 + 1 := by
-      have h_ge_zero : 0 ≤ (γ t).1 := by
-        exact (γ t).2.left
+  have hpγpos : pγ.1 > 0 := by
+    have hpos : 0 < (γ t).1 + 1 := by
+      have hnonneg : 0 ≤ (γ t).1 := (γ t).2.left
       linarith
-    exact one_div_pos.mpr h_gt_zero
-  have h_one_minus_pγ_geq : (1 - pγ.1) ≥ 0 := by
-    exact (comm_in_Icc pγ.2).1
+    exact one_div_pos.mpr hpos
+  have h1pγ : (1 - pγ.1) ≥ 0 := (comm_in_Icc pγ.2).1
   -- Therefore, u(t ⊕ x) - u(t ⊕ y) ≥ 0
-  have h_u_txy_geq : u (t⊕x) - u (t⊕y) ≥ 0 := by
-    have h_rhs_pos : (1 - pγ.1) * (u x - u y) ≥ 0 := by
-      apply mul_nonneg h_one_minus_pγ_geq
+  have hdifftxy : u (t ⊕ x) - u (t ⊕ y) ≥ 0 := by
+    have hrhs : (1 - pγ.1) * (u x - u y) ≥ 0 := by
+      apply mul_nonneg h1pγ
       linarith
-    have h_lhs_geq : pγ.1 * (u (t⊕x) - u (t⊕y)) ≥ 0 := by
-      rw [h_u_rearranged]
-      exact h_rhs_pos
-    have h_pos_or_neg := by
-      exact mul_nonneg_iff.mp h_lhs_geq
-    have h_pos : pγ.1 ≥ 0 ∧ (u (t⊕x) - u (t⊕y)) ≥ 0 := by
-      exact h_pos_or_neg.resolve_right (not_and_or.mpr (Or.inl (not_le_of_gt h_pγ_pos)))
-    exact h_pos.2
+    have hlhs : pγ.1 * (u (t ⊕ x) - u (t ⊕ y)) ≥ 0 := by
+      rw [hurearr]
+      exact hrhs
+    have hor := mul_nonneg_iff.mp hlhs
+    have hboth : pγ.1 ≥ 0 ∧ (u (t ⊕ x) - u (t ⊕ y)) ≥ 0 :=
+      hor.resolve_right (not_and_or.mpr (Or.inl (not_le_of_gt hpγpos)))
+    exact hboth.2
+  -- ===== Conclude: t ⊕ x ≽ t ⊕ y =====
   -- And so u(t ⊕ x) ≥ u(t ⊕ y)
-  have h_u_txy_geq_final : u (t⊕x) ≥ u (t⊕y) := by
-    linarith [h_u_txy_geq]
+  have hutxy : u (t ⊕ x) ≥ u (t ⊕ y) := by
+    linarith [hdifftxy]
   -- Thus, (t ⊕ x) ≽[r] (t ⊕ y)
-  have h_tx_ty : (t ⊕ x) ≽[r] (t ⊕ y) := by
-    exact (h_ordinal_consistent (t⊕x) (t⊕y)).mpr h_u_txy_geq_final
-  exact h_tx_ty
+  have htxty : (t ⊕ x) ≽[r] (t ⊕ y) := (hoc (t ⊕ x) (t ⊕ y)).mpr hutxy
+  exact htxty
 
-/-
-vNM ∧ dynamic consistency → u(t⊕x) = u(t) + F(t,x)u(x) with F(t,x) ≥ 0
--/
-theorem recursive_if_dc [inst : ConcatMixSpace α] (r : Relation α) :
-vNM_axioms r ∧ dynamic_consistency r → ∃ u : α → ℝ, utility_function u r ∧
-∃ F: (UniType inst.T) × α → ℝ, ∀ (x : α) (t : UniType inst.T),
-u (t ⊕ x) = u t.1 + F (t,x) * u x ∧ F (t,x) ≥ 0 := by
-  intro h_r_char
-  rcases h_r_char with ⟨h_vNM, h_dc⟩
+/-! ### vNM ∧ dynamic consistency ⇒ u(t ⊕ x) = u(t) + F(t, x) u(x) with F(t, x) ≥ 0 -/
+
+/-- vNM ∧ dynamic consistency ⇒ ∃ utility u and F ≥ 0 with u(t ⊕ x) = u(t) + F(t, x) u(x):
+`vNM_axioms r ∧ DynamicConsistency r → ∃ u, utility_function u r ∧
+∃ F, ∀ x t, u (t ⊕ x) = u t.1 + F (t, x) * u x ∧ F (t, x) ≥ 0`. -/
+theorem recursive_of_dynamicConsistency [inst : ConcatMixSpace α] (r : Relation α) :
+    vNM_axioms r ∧ DynamicConsistency r → ∃ u : α → ℝ, utility_function u r ∧
+    ∃ F : (UniType inst.T) × α → ℝ, ∀ (x : α) (t : UniType inst.T),
+    u (t ⊕ x) = u t.1 + F (t, x) * u x ∧ F (t, x) ≥ 0 := by
+  intro h
+  rcases h with ⟨hvNM, hdc⟩
+  -- ===== A utility function u with u(ε) = 0 =====
   -- Existence of utility function from vNM theorem
-  have h_u_exists := (vNM_theorem r).mp h_vNM
+  have huexists := (vNM_theorem r).mp hvNM
   -- Set u(ε) = 0
-  have h_u_offset := utility_offset r h_u_exists 0 inst.ε
-  rcases h_u_offset with ⟨u, h_utility_function, h_u_ε_0⟩
-  rcases h_utility_function with ⟨h_ordinal_consistent, h_p_linear⟩
+  have huoffset := utility_offset r huexists 0 inst.ε
+  rcases huoffset with ⟨u, hutility, huε0⟩
+  rcases hutility with ⟨hoc, hplin⟩
+  -- ===== Define F =====
   -- Lets define F = (u(t ⊕ x) - u t.1) / u x if u x ≠ 0, and 0 otherwise
-  let F : (UniType inst.T) × α → ℝ :=
-    fun tx =>
+  let F : (UniType inst.T) × α → ℝ := fun tx ↦
     let t := tx.1
     let x := tx.2
     if u x = 0 then 0 else (u (t ⊕ x) - u t.1) / u x
-  have h_F_prop : ∀ (x : α) (t : UniType inst.T),
-    u (t ⊕ x) = u t.1 + F (t,x) * u x ∧ F (t,x) ≥ 0 := by
+  -- ===== F has the required properties =====
+  have hF : ∀ (x : α) (t : UniType inst.T),
+      u (t ⊕ x) = u t.1 + F (t, x) * u x ∧ F (t, x) ≥ 0 := by
     intro x t
-    by_cases h_ux_zero : u x = 0
-    · -- If u x = 0, u x = u ε
-      have h_ux_ε : u x = u inst.ε := by
-        rw [←h_u_ε_0] at h_ux_zero
-        exact h_ux_zero
+    by_cases hux0 : u x = 0
+    · -- ===== u(x) = 0 =====
+      -- If u x = 0, u x = u ε
+      have huxeε : u x = u inst.ε := by
+        rw [← huε0] at hux0
+        exact hux0
       -- So x ≽ ε and ε ≽ x
-      have h_x_ε : x ≽[r] inst.ε := by
-        exact (h_ordinal_consistent x inst.ε).mpr (le_of_eq h_ux_ε.symm)
-      have h_ε_x : inst.ε ≽[r] x := by
-        exact (h_ordinal_consistent inst.ε x).mpr (le_of_eq h_ux_ε)
+      have hxε : x ≽[r] inst.ε := (hoc x inst.ε).mpr (le_of_eq huxeε.symm)
+      have hεx : inst.ε ≽[r] x := (hoc inst.ε x).mpr (le_of_eq huxeε)
       -- So by DC consistency, t ⊕ x ≽ t ⊕ ε and t ⊕ ε ≽ t ⊕ x
-      have h_tx_ε : (t ⊕ x) ≽[r] (t ⊕ inst.ε):= by
-        exact h_dc x inst.ε t h_x_ε
-      have h_ε_tx : (t ⊕ inst.ε) ≽[r] (t ⊕ x) := by
-        exact h_dc inst.ε x t h_ε_x
+      have htxtε : (t ⊕ x) ≽[r] (t ⊕ inst.ε) := hdc x inst.ε t hxε
+      have htεtx : (t ⊕ inst.ε) ≽[r] (t ⊕ x) := hdc inst.ε x t hεx
       -- So u(t ⊕ x) = u(t ⊕ ε) = u t.1
-      have h_u_tx : u (t ⊕ x) = u (t ⊕ inst.ε) := by
-        have h_geq := (h_ordinal_consistent (t⊕x) (t⊕inst.ε)).mp h_tx_ε
-        have h_leq := (h_ordinal_consistent (t⊕inst.ε) (t⊕x)).mp h_ε_tx
-        exact le_antisymm h_leq h_geq
-      have h_u_tx_reduced : u (t ⊕ x) = u t.1 := by
-        rw [inst.concat_idempotent t] at h_u_tx
-        exact h_u_tx
+      have hutx : u (t ⊕ x) = u (t ⊕ inst.ε) := by
+        have hge := (hoc (t ⊕ x) (t ⊕ inst.ε)).mp htxtε
+        have hle := (hoc (t ⊕ inst.ε) (t ⊕ x)).mp htεtx
+        exact le_antisymm hle hge
+      have hutxred : u (t ⊕ x) = u t.1 := by
+        rw [inst.concat_idempotent t] at hutx
+        exact hutx
       -- So we have to prove u t.1 = u t.1 + F (t,x) * u x and F (t,x) ≥ 0
       -- which is true for any value F (t,x) ≥ 0, in particular F (t,x) = 0
-      rw [h_u_tx_reduced]
-      simp only [F, h_ux_zero, if_true, mul_zero, add_zero]
+      rw [hutxred]
+      simp only [F, hux0, if_true, mul_zero, add_zero]
       exact ⟨trivial, le_rfl⟩
-    · -- If u x ≠ 0, we can rearrange the definition of F
-      have h_F_def : F (t,x) = (u (t ⊕ x) - u t.1) / u x := by
-        simp only [F, h_ux_zero, if_false]
-      have h_u_prop : u (t ⊕ x) = u t.1 + F (t,x) * u x := by
-        rw [h_F_def]
-        field_simp [h_ux_zero]
+    · -- ===== u(x) ≠ 0 =====
+      -- If u x ≠ 0, we can rearrange the definition of F
+      have hFdef : F (t, x) = (u (t ⊕ x) - u t.1) / u x := by
+        simp only [F, hux0, if_false]
+      have hurec : u (t ⊕ x) = u t.1 + F (t, x) * u x := by
+        rw [hFdef]
+        field_simp [hux0]
         linarith
       -- We also need to show F (t,x) ≥ 0
-      by_cases h_x_ε : u x > 0
-      · -- If u x ≥ 0 then x ≽ ε and
+      by_cases huxpos : u x > 0
+      · -- If u x > 0 then x ≽ ε and
         -- u(x) ≥ 0 and u(t ⊕ x) - u(t) ≥ 0 by DC consistency
-        have h_ux_ge_uε : u x ≥ u inst.ε := by
-          rw [←h_u_ε_0] at h_x_ε
-          exact le_of_lt h_x_ε
-        have h_x_ε : x ≽[r] inst.ε := by
-          exact (h_ordinal_consistent x inst.ε).mpr h_ux_ge_uε
-        have h_tx_ε : (t ⊕ x) ≽[r] (t ⊕ inst.ε) := by
-          exact h_dc x inst.ε t h_x_ε
-        have h_u_tx_geq : u (t ⊕ x) ≥ u (t ⊕ inst.ε) := by
-          exact (h_ordinal_consistent (t⊕x) (t⊕inst.ε)).mp h_tx_ε
-        have h_u_tx_geq_reduced : u (t ⊕ x) ≥ u t.1 := by
-          rw [inst.concat_idempotent t] at h_u_tx_geq
-          exact h_u_tx_geq
-        have h_F_geq : F (t,x) ≥ 0 := by
-          rw [h_F_def]
-          field_simp [h_ux_zero]
+        have huxε : u x ≥ u inst.ε := by
+          rw [← huε0] at huxpos
+          exact le_of_lt huxpos
+        have hxε : x ≽[r] inst.ε := (hoc x inst.ε).mpr huxε
+        have htxtε : (t ⊕ x) ≽[r] (t ⊕ inst.ε) := hdc x inst.ε t hxε
+        have hutxtε : u (t ⊕ x) ≥ u (t ⊕ inst.ε) := (hoc (t ⊕ x) (t ⊕ inst.ε)).mp htxtε
+        have hutxt : u (t ⊕ x) ≥ u t.1 := by
+          rw [inst.concat_idempotent t] at hutxtε
+          exact hutxtε
+        have hFnonneg : F (t, x) ≥ 0 := by
+          rw [hFdef]
+          field_simp [hux0]
           linarith
-        exact ⟨h_u_prop, h_F_geq⟩
+        exact ⟨hurec, hFnonneg⟩
       · -- If ¬ u(x) = 0 and ¬ u(x) > 0, then u(x) < 0
-        have h_ux_le_z: u x ≤ 0 := by
+        have huxnonpos : u x ≤ 0 := by
           linarith
-        have h_ux_le_uε : u x ≤ u inst.ε := by
+        have huεx : u x ≤ u inst.ε := by
           linarith
         -- So ε ≽ x and u(t ⊕ x) - u(t) ≤ 0 by DC consistency
-        have h_ε_x : inst.ε ≽[r] x := by
-          exact (h_ordinal_consistent inst.ε x).mpr h_ux_le_uε
-        have h_ε_tx : (t ⊕ inst.ε) ≽[r] (t ⊕ x) := by
-          exact h_dc inst.ε x t h_ε_x
-        have h_u_tx_leq : u (t ⊕ x) ≤ u (t ⊕ inst.ε) := by
-          exact (h_ordinal_consistent (t⊕inst.ε) (t⊕x)).mp h_ε_tx
-        have h_u_tx_leq_reduced : u (t ⊕ x) ≤ u t.1 := by
-          rw [inst.concat_idempotent t] at h_u_tx_leq
-          exact h_u_tx_leq
-        have h_F_geq : F (t,x) ≥ 0 := by
-          rw [h_F_def]
-          field_simp [h_ux_zero]
-          have h_numer_leq : u (t ⊕ x) - u t.1 ≤ 0 := by
+        have hεx : inst.ε ≽[r] x := (hoc inst.ε x).mpr huεx
+        have htεtx : (t ⊕ inst.ε) ≽[r] (t ⊕ x) := hdc inst.ε x t hεx
+        have hutεtx : u (t ⊕ x) ≤ u (t ⊕ inst.ε) := (hoc (t ⊕ inst.ε) (t ⊕ x)).mp htεtx
+        have huttx : u (t ⊕ x) ≤ u t.1 := by
+          rw [inst.concat_idempotent t] at hutεtx
+          exact hutεtx
+        have hFnonneg : F (t, x) ≥ 0 := by
+          rw [hFdef]
+          field_simp [hux0]
+          have hnum : u (t ⊕ x) - u t.1 ≤ 0 := by
             linarith
-          exact div_nonneg_of_nonpos h_numer_leq h_ux_le_z
-        exact ⟨h_u_prop, h_F_geq⟩
+          exact div_nonneg_of_nonpos hnum huxnonpos
+        exact ⟨hurec, hFnonneg⟩
   -- So we have u and F with the desired properties
-  exact ⟨u, ⟨h_ordinal_consistent, h_p_linear⟩, F, h_F_prop⟩
+  exact ⟨u, ⟨hoc, hplin⟩, F, hF⟩
 
+end DynamicConsistency
 
-/-
-Markov reward Theorem: A preference relation on a concatenable mixture space
-satisfies completeness, transitivity, independence, continuity and γ-indifference,
-↔ there exists a reward function u : α → ℝ that represents the preference relation.
-Proof from Bowling et al. (2023) "Settling the Reward Hypothesis"
--/
+section MarkovReward
 
-theorem Markov_Reward_theorem [inst : ConcatMixSpace α] (r : Relation α) :
-  vNM_axioms r ∧ γ_indifference r ↔ ∃ u : α → ℝ, reward_function u r := by
-  apply Iff.intro
-  -- Forward direction
-  · intro h
-    rcases h with ⟨h_vNM, h_γ_indiff⟩
-    rcases h_γ_indiff with ⟨γ, h_γ_indiff⟩
+/-! ## The Markov reward theorem -/
+
+/-- Markov reward theorem (vNM axioms ∧ γ-indifference ⇔ ∃ reward function u):
+`vNM_axioms r ∧ γIndifference r ↔ ∃ u : α → ℝ, RewardFunction u r`.
+
+A preference relation on a concatenable mixture space satisfies completeness, transitivity,
+independence, continuity and γ-indifference ⇔ there exists a reward function u : α → ℝ that
+represents the preference relation.
+Proof from Bowling et al. (2023) "Settling the Reward Hypothesis". -/
+theorem markov_reward_theorem [inst : ConcatMixSpace α] (r : Relation α) :
+    vNM_axioms r ∧ γIndifference r ↔ ∃ u : α → ℝ, RewardFunction u r := by
+  constructor
+  · -- ===== Forward direction: vNM ∧ γ-indifference → ∃ reward function =====
+    intro h
+    rcases h with ⟨hvNM, hγindiff⟩
+    rcases hγindiff with ⟨γ, hγindiff⟩
+    -- ===== A utility function u with u(ε) = 0 =====
     -- Existence of utility function from vNM theorem
-    have h_u_exists := (vNM_theorem r).mp h_vNM
+    have huexists := (vNM_theorem r).mp hvNM
     -- Set u(ε) = 0
-    have h_u_offset := utility_offset r h_u_exists 0 inst.ε
-    rcases h_u_offset with ⟨u, h_utility_function, h_u_ε_0⟩
-    rcases h_utility_function with ⟨h_ordinal_consistent, h_p_linear⟩
-    have h_u_markov : markov_recursive u := by
-      use γ
+    have huoffset := utility_offset r huexists 0 inst.ε
+    rcases huoffset with ⟨u, hutility, huε0⟩
+    rcases hutility with ⟨hoc, hplin⟩
+    -- ===== u is Markov recursive =====
+    have humarkov : MarkovRecursive u := by
+      refine ⟨γ, ?_⟩
       intro x t
       -- From γ-indifference choosing y = ε
       -- ((t ⊕ x)+[pγ]ε) ∼[r] ((t ⊕ ε)+[pγ]x)
-      have h_γ_prop := h_γ_indiff x inst.ε t
+      have hγprop := hγindiff x inst.ε t
       -- Transform it into u
       -- u((t ⊕ x)+[pγ]ε) = u((t ⊕ ε)+[pγ]x)
       let pγ' : IntervalType := ⟨1/((γ t).1 + 1), indiff_in_Icc (γ t).2⟩
-      have h_γ'_prop : ((t⊕x) +[pγ'] inst.ε) ∼[r] ((t⊕inst.ε) +[pγ']x)  := by
-        exact h_γ_prop
-      have h_u_prop_geq := (h_ordinal_consistent ((t⊕x) +[pγ'] inst.ε)
-       ((t⊕inst.ε) +[pγ']x)).mp h_γ'_prop.left
-      have h_u_prop_leq := (h_ordinal_consistent ((t⊕inst.ε) +[pγ']x)
-       ((t⊕x) +[pγ'] inst.ε)).mp h_γ'_prop.right
-      have h_u_prop : u ((t⊕x) +[pγ']inst.ε) = u ((t⊕inst.ε) +[pγ']x) :=
-        le_antisymm h_u_prop_leq h_u_prop_geq
+      have hγprop' : ((t ⊕ x) +[pγ'] inst.ε) ∼[r] ((t ⊕ inst.ε) +[pγ'] x) := hγprop
+      have hge := (hoc ((t ⊕ x) +[pγ'] inst.ε) ((t ⊕ inst.ε) +[pγ'] x)).mp hγprop'.left
+      have hle := (hoc ((t ⊕ inst.ε) +[pγ'] x) ((t ⊕ x) +[pγ'] inst.ε)).mp hγprop'.right
+      have hueq : u ((t ⊕ x) +[pγ'] inst.ε) = u ((t ⊕ inst.ε) +[pγ'] x) :=
+        le_antisymm hle hge
       -- Use linear property to expand both sides
       -- pγ' u(t ⊕ x) + (1 - pγ') u(ε) = pγ' u(t ⊕ ε) + (1 - pγ') u(x)
-      have h_u_prop_lin : pγ'.1 * u ((t⊕x)) + (1 - pγ'.1) * u (inst.ε) =
-       pγ'.1 * u ((t⊕inst.ε)) + (1 - pγ'.1) * u x := by
-        rw [h_p_linear ((t⊕x)) (inst.ε) pγ'] at h_u_prop
-        rw [h_p_linear ((t⊕inst.ε)) x pγ'] at h_u_prop
-        exact h_u_prop
+      have hulin : pγ'.1 * u (t ⊕ x) + (1 - pγ'.1) * u inst.ε =
+          pγ'.1 * u (t ⊕ inst.ε) + (1 - pγ'.1) * u x := by
+        rw [hplin (t ⊕ x) inst.ε pγ'] at hueq
+        rw [hplin (t ⊕ inst.ε) x pγ'] at hueq
+        exact hueq
       -- Reduce t ⊕ ε = t and u(ε) = 0
       -- pγ' u(t ⊕ x) = pγ' u(t) + (1 - pγ') u(x)
-      have h_u_prop_reduced : pγ'.1 * u (t⊕x) = pγ'.1 * u t.1 + (1 - pγ'.1) * u x := by
-        rw [inst.concat_idempotent t] at h_u_prop_lin
-        rw [h_u_ε_0] at h_u_prop_lin
-        simp only [mul_zero, add_zero] at h_u_prop_lin
-        exact h_u_prop_lin
+      have hured : pγ'.1 * u (t ⊕ x) = pγ'.1 * u t.1 + (1 - pγ'.1) * u x := by
+        rw [inst.concat_idempotent t] at hulin
+        rw [huε0] at hulin
+        simp only [mul_zero, add_zero] at hulin
+        exact hulin
       -- Multiply both sides by ((γ t).1 + 1)
       -- u(t ⊕ x) = u(t) + (γ t).1 * u(x)
-      have h_u_prop_final : u (t⊕x) = u t.1 + (γ t).1 * u x := by
-        have h_mult_pos : 0 < (γ t).1 + 1 := by
-          have h_gt_zero : 0 ≤ (γ t).1 := by
-            exact (γ t).2.left
+      have hufinal : u (t ⊕ x) = u t.1 + (γ t).1 * u x := by
+        have hmultpos : 0 < (γ t).1 + 1 := by
+          have hnonneg : 0 ≤ (γ t).1 := (γ t).2.left
           linarith
-        have h_mult_both_sides := by
-          simp only [pγ'] at h_u_prop_reduced
-          apply (congr_arg (fun z => ((γ t).1 + 1) * z)) at h_u_prop_reduced
-          field_simp [h_mult_pos] at h_u_prop_reduced
-          simp only [sub_eq_add_neg, add_assoc, add_neg_cancel, add_zero] at h_u_prop_reduced
-          exact h_u_prop_reduced
-        exact h_mult_both_sides
-      exact ⟨h_u_prop_final, h_u_ε_0⟩
-    -- So this u is ordinal consistent, p_linear and markov_recursive
-    use u
-    exact ⟨h_ordinal_consistent, h_p_linear, h_u_markov⟩
-  -- Backward direction
-  · intro h
+        have hmult := by
+          simp only [pγ'] at hured
+          apply (congr_arg (fun z ↦ ((γ t).1 + 1) * z)) at hured
+          field_simp [hmultpos] at hured
+          simp only [sub_eq_add_neg, add_assoc, add_neg_cancel, add_zero] at hured
+          exact hured
+        exact hmult
+      exact ⟨hufinal, huε0⟩
+    -- So this u is ordinal consistent, p_linear and MarkovRecursive
+    exact ⟨u, hoc, hplin, humarkov⟩
+  · -- ===== Backward direction: ∃ reward function → vNM ∧ γ-indifference =====
+    intro h
+    -- ===== The vNM axioms =====
     -- The vNM axioms come from the reward function being a utility function
     -- and the vNM theorem
-    have h_vNM : vNM_axioms r := by
-      rcases h with ⟨u, h_reward_function⟩
-      rcases h_reward_function with ⟨h_ordinal_consistent, h_p_linear, h_markov_recursive⟩
-      have h_u_utility : ∃ u, utility_function u r :=
-        ⟨u, ⟨h_ordinal_consistent, h_p_linear⟩⟩
-      exact (vNM_theorem r).mpr h_u_utility
-    -- γ-indifference comes from the markov_recursive property
-    have h_γ_indiff : γ_indifference r := by
-      rcases h with ⟨u, h_reward_function⟩
-      rcases h_reward_function with ⟨h_ordinal_consistent, h_p_linear, h_markov_recursive⟩
-      rcases h_markov_recursive with ⟨γ, h_markov_prop⟩
-      use γ
+    have hvNM : vNM_axioms r := by
+      rcases h with ⟨u, hreward⟩
+      rcases hreward with ⟨hoc, hplin, _⟩
+      have huutility : ∃ u, utility_function u r := ⟨u, ⟨hoc, hplin⟩⟩
+      exact (vNM_theorem r).mpr huutility
+    -- ===== γ-indifference =====
+    -- γ-indifference comes from the MarkovRecursive property
+    have hγindiff : γIndifference r := by
+      rcases h with ⟨u, hreward⟩
+      rcases hreward with ⟨hoc, hplin, hmarkov⟩
+      rcases hmarkov with ⟨γ, hrec⟩
+      refine ⟨γ, ?_⟩
       intro x y t
       let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_in_Icc (γ t).2⟩
       -- First, we express as u(t ⊕ x) - (γ t) * u x = u t.1
-      have h_u_t_x : u (t⊕x) - (γ t).1 * u x = u t.1 := by
-        linarith [ (h_markov_prop x t).1 ]
-      have h_u_t_y : u (t⊕y) - (γ t).1 * u y = u t.1 := by
-        linarith [ (h_markov_prop y t).1 ]
+      have hutx : u (t ⊕ x) - (γ t).1 * u x = u t.1 := by
+        linarith [(hrec x t).1]
+      have huty : u (t ⊕ y) - (γ t).1 * u y = u t.1 := by
+        linarith [(hrec y t).1]
       -- Then, u(t ⊕ x) - (γ t) * u x = u(t ⊕ y) - (γ t) * u y
-      have h_u_eq : u (t⊕x) - (γ t).1 * u x = u (t⊕y) - (γ t).1 * u y := by
-        linarith [h_u_t_x, h_u_t_y]
+      have hueq : u (t ⊕ x) - (γ t).1 * u x = u (t ⊕ y) - (γ t).1 * u y := by
+        linarith [hutx, huty]
       -- Rearranging, we get:
       -- u(t ⊕ x) + (γ t) * u y = u(t ⊕ y) + (γ t) * u x
-      have h_u_rearranged : u (t⊕x) + (γ t).1 * u y = u (t⊕y) + (γ t).1 * u x := by
-        linarith [h_u_eq]
+      have hurearr : u (t ⊕ x) + (γ t).1 * u y = u (t ⊕ y) + (γ t).1 * u x := by
+        linarith [hueq]
       -- Now, we multiply both sides by 1/((γ t).1 + 1)
       -- (1/((γ t).1 + 1)) u(t ⊕ x) + (1 - (1/((γ t).1 + 1))) u y
       -- = (1/((γ t).1 + 1)) u(t ⊕ y) + (1 - (1/((γ t).1 + 1))) u x
-      have h_u_multiplied : (1/((γ t).1 + 1)) * u (t⊕x) + (1 - (1/((γ t).1 + 1))) * u y =
-       (1/((γ t).1 + 1)) * u (t⊕y) + (1 - (1/((γ t).1 + 1))) * u x := by
-        have h_mult_pos : 0 < (γ t).1 + 1 := by
-          have h_gt_zero : 0 ≤ (γ t).1 := by
-            exact (γ t).2.left
+      have hmul : (1/((γ t).1 + 1)) * u (t ⊕ x) + (1 - (1/((γ t).1 + 1))) * u y =
+          (1/((γ t).1 + 1)) * u (t ⊕ y) + (1 - (1/((γ t).1 + 1))) * u x := by
+        have hmultpos : 0 < (γ t).1 + 1 := by
+          have hnonneg : 0 ≤ (γ t).1 := (γ t).2.left
           linarith
-        have h_mult_inv : (1/((γ t).1 + 1)) * (γ t).1 = 1 - 1/((γ t).1 + 1) := by
-          field_simp [h_mult_pos]
+        have hmultinv : (1/((γ t).1 + 1)) * (γ t).1 = 1 - 1/((γ t).1 + 1) := by
+          field_simp [hmultpos]
           linarith
-        have h_mult_both_sides := by
-          apply (congr_arg (fun z => (1/((γ t).1 + 1)) * z)) at h_u_rearranged
-          rw [mul_add, ←mul_assoc, mul_add, ←mul_assoc] at h_u_rearranged
-          rw [h_mult_inv] at h_u_rearranged
-          exact h_u_rearranged
-        exact h_mult_both_sides
+        have hmult := by
+          apply (congr_arg (fun z ↦ (1/((γ t).1 + 1)) * z)) at hurearr
+          rw [mul_add, ← mul_assoc, mul_add, ← mul_assoc] at hurearr
+          rw [hmultinv] at hurearr
+          exact hurearr
+        exact hmult
       -- We use pγ to rewrite both sides (just syntax)
       -- pγ.1 * u(t ⊕ x) + (1 - pγ.1) * u y = pγ.1 * u(t ⊕ y) + (1 - pγ.1) * u x
-      have h_u_multiplied : pγ.1 * u (t⊕x) + (1 - pγ.1) * u y =
-       pγ.1 * u (t⊕y) + (1 - pγ.1) * u x := by
-        exact h_u_multiplied
+      have hmulpγ : pγ.1 * u (t ⊕ x) + (1 - pγ.1) * u y =
+          pγ.1 * u (t ⊕ y) + (1 - pγ.1) * u x := hmul
       -- Use linearity to rewrite as mixtures
       -- u((t ⊕ x)+[pγ]y) = u((t ⊕ y)+[pγ]x)
-      have h_u_mixtures : u ((t⊕x) +[pγ] y) = u ((t⊕y) +[pγ] x) := by
-        rw [←h_p_linear (t⊕x) y pγ] at h_u_multiplied
-        rw [←h_p_linear (t⊕y) x pγ] at h_u_multiplied
-        exact h_u_multiplied
+      have humix : u ((t ⊕ x) +[pγ] y) = u ((t ⊕ y) +[pγ] x) := by
+        rw [← hplin (t ⊕ x) y pγ] at hmulpγ
+        rw [← hplin (t ⊕ y) x pγ] at hmulpγ
+        exact hmulpγ
       -- Use ordinal consistency to get indifference
-      -- ((t⊕x) +[pγ]y) ∼[r] ((t⊕y) +[pγ]x)
-      have h_indiff : ((t⊕x) +[pγ] y) ∼[r] ((t⊕y) +[pγ] x) := by
-        have h_geq := (h_ordinal_consistent ((t⊕x) +[pγ] y)
-         ((t⊕y) +[pγ] x)).mpr (ge_of_eq h_u_mixtures)
-        have h_leq := (h_ordinal_consistent ((t⊕y) +[pγ] x)
-         ((t⊕x) +[pγ] y)).mpr (ge_of_eq h_u_mixtures.symm)
-        exact ⟨h_geq, h_leq⟩
-      exact h_indiff
+      -- ((t ⊕ x) +[pγ] y) ∼[r] ((t ⊕ y) +[pγ] x)
+      have hindiff : ((t ⊕ x) +[pγ] y) ∼[r] ((t ⊕ y) +[pγ] x) := by
+        have hge := (hoc ((t ⊕ x) +[pγ] y) ((t ⊕ y) +[pγ] x)).mpr (ge_of_eq humix)
+        have hle := (hoc ((t ⊕ y) +[pγ] x) ((t ⊕ x) +[pγ] y)).mpr (ge_of_eq humix.symm)
+        exact ⟨hge, hle⟩
+      exact hindiff
     -- So we have both parts
-    exact ⟨h_vNM, h_γ_indiff⟩
+    exact ⟨hvNM, hγindiff⟩
+
+end MarkovReward
+
 end Reward

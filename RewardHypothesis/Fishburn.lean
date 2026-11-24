@@ -230,11 +230,11 @@ lemma ordinal_iff_weakOrder_of_completeness {r : Relation α} :
     Completeness r → (Ordinal r ↔ WeakOrder (Strict r)) := by
   intro hcompl
   constructor
-  · -- ===== Forward direction: ordinal r → weak_order (strict r) =====
+  · -- ===== Forward direction: Ordinal r → WeakOrder (Strict r) =====
     -- Always true, without completeness
     intro hord
     exact weakOrder_of_ordinal hord
-  · -- ===== Backward direction: weak_order (strict r) → ordinal r =====
+  · -- ===== Backward direction: WeakOrder (Strict r) → Ordinal r =====
     intro hwo
     rcases hwo with ⟨_, hnegtrans⟩
     constructor
@@ -284,12 +284,12 @@ lemma ordinalConsistent_iff_ordinalConsistentStrict_of_completeness {r : Relatio
   intro hcompl
   constructor
   · -- ===== Forward direction =====
-    -- ordinal_consistent f r → ordinal_consistent_strict f (strict r)
+    -- OrdinalConsistent f r → OrdinalConsistentStrict f (Strict r)
     -- Always true, without completeness
     intro hoc
     exact ordinalConsistentStrict_of_ordinalConsistent hoc
   · -- ===== Backward direction =====
-    -- ordinal_consistent_strict f (strict r) → ordinal_consistent f r
+    -- OrdinalConsistentStrict f (Strict r) → OrdinalConsistent f r
     intro hocs x y
     constructor
     · -- ===== x ≽[r] y → f x ≥ f y =====
@@ -1375,19 +1375,19 @@ lemma orderSeparable_of_ordinalConsistentStrict {rs : Relation α} {f : α → �
 
 /-- Fishburn's theorem (≻ weak order ∧ X/∼ order separable ⇔ ∃ f : X → ℝ with
 x ≻ y ⇔ f(x) > f(y)):
-`(∃ h : weak_order rs, order_separable (IndiffQuotRel rs h)) ↔
-∃ f : α → ℝ, ordinal_consistent_strict f rs`.
+`(∃ h : WeakOrder rs, OrderSeparable (IndiffQuotRel rs h)) ↔
+∃ f : α → ℝ, OrdinalConsistentStrict f rs`.
 
 Proof from: Fishburn (1970) "Utility Theory for Decision Making" Theorem 3.1. -/
 theorem fishburn_theorem (rs : Relation α) :
     (∃ h : WeakOrder rs, OrderSeparable (IndiffQuotRel rs h))
     ↔ ∃ f : α → ℝ, OrdinalConsistentStrict f rs := by
   constructor
-  · -- ===== Forward direction: weak order ∧ order_separable → ∃ function =====
+  · -- ===== Forward direction: weak order ∧ OrderSeparable → ∃ function =====
     intro hex
     rcases hex with ⟨hwo, hsep⟩
     exact exists_ordinalConsistentStrict_of_orderSeparable hwo hsep
-  · -- ===== Backward direction: ∃ function → weak order ∧ order_separable =====
+  · -- ===== Backward direction: ∃ function → weak order ∧ OrderSeparable =====
     intro hex
     rcases hex with ⟨f, hocs⟩
     have hwo := weakOrder_of_ordinalConsistentStrict hocs
@@ -1404,13 +1404,13 @@ section Ordinal
 
 /-- Main ordinal theorem (≽ complete ∧ transitive ∧ X/∼ order separable ⇔
 ∃ f : X → ℝ with x ≽ y ⇔ f(x) ≥ f(y)):
-`(∃ h : ordinal r, order_separable (IndiffQuotRel (strict r) (weak_if_ordinal h))) ↔
-∃ f : α → ℝ, ordinal_consistent f r`. -/
+`(∃ h : Ordinal r, OrderSeparable (IndiffQuotRel (Strict r) (weakOrder_of_ordinal h))) ↔
+∃ f : α → ℝ, OrdinalConsistent f r`. -/
 theorem ordinal_theorem (r : Relation α) :
     (∃ h : Ordinal r, OrderSeparable (IndiffQuotRel (Strict r) (weakOrder_of_ordinal h)))
     ↔ ∃ f : α → ℝ, OrdinalConsistent f r := by
   constructor
-  · -- ===== Forward direction: ordinal axioms ∧ order_separable → ∃ function =====
+  · -- ===== Forward direction: ordinal axioms ∧ OrderSeparable → ∃ function =====
     intro hex
     rcases hex with ⟨hord, hsep⟩
     have hcompl := hord.left
@@ -1424,7 +1424,7 @@ theorem ordinal_theorem (r : Relation α) :
     have hoc : OrdinalConsistent f r :=
       (ordinalConsistent_iff_ordinalConsistentStrict_of_completeness hcompl).mpr hocs
     exact ⟨f, hoc⟩
-  · -- ===== Backward direction: ∃ function → ordinal axioms ∧ order_separable =====
+  · -- ===== Backward direction: ∃ function → ordinal axioms ∧ OrderSeparable =====
     intro hex
     rcases hex with ⟨f, hoc⟩
     -- ∃ f → r is complete
