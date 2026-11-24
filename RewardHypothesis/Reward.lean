@@ -54,9 +54,9 @@ def MarkovRecursive [inst : ConcatMixSpace α] (u : α → ℝ) : Prop :=
 
 /-- What it means for a function to be a reward function
 (u ordinal consistent ∧ p-linear ∧ Markov recursive):
-`OrdinalConsistent u r ∧ p_linear u ∧ MarkovRecursive u`. -/
+`OrdinalConsistent u r ∧ PLinear u ∧ MarkovRecursive u`. -/
 def RewardFunction [ConcatMixSpace α] (u : α → ℝ) (r : Relation α) : Prop :=
-  OrdinalConsistent u r ∧ p_linear u ∧ MarkovRecursive u
+  OrdinalConsistent u r ∧ PLinear u ∧ MarkovRecursive u
 
 /-! ### Axioms for Markov reward
 
@@ -67,7 +67,7 @@ Define the axioms for Markov reward on a preference relation.
 
 /-- g ∈ [0, 1] ⇒ 1/(g + 1) ∈ [0, 1]:
 `g ∈ Set.Icc (0 : ℝ) 1 → 1/(g+1) ∈ Set.Icc (0 : ℝ) 1`. -/
-lemma indiff_in_Icc (hg : g ∈ Set.Icc (0 : ℝ) 1) : 1/(g+1) ∈ Set.Icc (0 : ℝ) 1 := by
+lemma indiff_mem_Icc (hg : g ∈ Set.Icc (0 : ℝ) 1) : 1/(g+1) ∈ Set.Icc (0 : ℝ) 1 := by
   rcases hg with ⟨hg0, _⟩
   have hdenom : 0 < g + 1 := by
     linarith
@@ -90,7 +90,7 @@ def DynamicConsistency [inst : ConcatMixSpace α] (r : Relation α) : Prop :=
 `∃ γ, ∀ x y t, ((t ⊕ x) +[pγ] y) ∼[r] ((t ⊕ y) +[pγ] x)`, `pγ := 1/((γ t).1 + 1)`. -/
 def γIndifference [inst : ConcatMixSpace α] (r : Relation α) : Prop :=
   ∃ γ : UniType inst.T → IntervalType, ∀ x y : α, ∀ t : UniType inst.T,
-    let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_in_Icc (γ t).2⟩
+    let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_mem_Icc (γ t).2⟩
     ((t ⊕ x) +[pγ] y) ∼[r] ((t ⊕ y) +[pγ] x)
 
 end RewardFunctions
@@ -102,9 +102,9 @@ section DynamicConsistency
 /-! ### vNM ⇒ (γ-indifference ⇒ dynamic consistency) -/
 
 /-- vNM ⇒ (γ-indifference ⇒ dynamic consistency):
-`vNM_axioms r → (γIndifference r → DynamicConsistency r)`. -/
+`VNMAxioms r → (γIndifference r → DynamicConsistency r)`. -/
 theorem dynamicConsistency_of_γIndifference [ConcatMixSpace α] (r : Relation α) :
-    vNM_axioms r → (γIndifference r → DynamicConsistency r) := by
+    VNMAxioms r → (γIndifference r → DynamicConsistency r) := by
   intro hvNM hγindiff
   rcases hγindiff with ⟨γ, hγindiff⟩
   intro x y t hxy
@@ -115,7 +115,7 @@ theorem dynamicConsistency_of_γIndifference [ConcatMixSpace α] (r : Relation �
   rcases hutility with ⟨hoc, hplin⟩
   -- ===== γ-indifference in terms of u =====
   -- Apply this in the γ-indifference property
-  let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_in_Icc (γ t).2⟩
+  let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_mem_Icc (γ t).2⟩
   have hγprop := hγindiff x y t
   -- Transform it into u
   -- u((t ⊕ x)+[pγ]y) = u((t ⊕ y)+[pγ]x)
@@ -147,7 +147,7 @@ theorem dynamicConsistency_of_γIndifference [ConcatMixSpace α] (r : Relation �
       have hnonneg : 0 ≤ (γ t).1 := (γ t).2.left
       linarith
     exact one_div_pos.mpr hpos
-  have h1pγ : (1 - pγ.1) ≥ 0 := (comm_in_Icc pγ.2).1
+  have h1pγ : (1 - pγ.1) ≥ 0 := (comm_mem_Icc pγ.2).1
   -- Therefore, u(t ⊕ x) - u(t ⊕ y) ≥ 0
   have hdifftxy : u (t ⊕ x) - u (t ⊕ y) ≥ 0 := by
     have hrhs : (1 - pγ.1) * (u x - u y) ≥ 0 := by
@@ -171,10 +171,10 @@ theorem dynamicConsistency_of_γIndifference [ConcatMixSpace α] (r : Relation �
 /-! ### vNM ∧ dynamic consistency ⇒ u(t ⊕ x) = u(t) + F(t, x) u(x) with F(t, x) ≥ 0 -/
 
 /-- vNM ∧ dynamic consistency ⇒ ∃ utility u and F ≥ 0 with u(t ⊕ x) = u(t) + F(t, x) u(x):
-`vNM_axioms r ∧ DynamicConsistency r → ∃ u, utility_function u r ∧
+`VNMAxioms r ∧ DynamicConsistency r → ∃ u, UtilityFunction u r ∧
 ∃ F, ∀ x t, u (t ⊕ x) = u t.1 + F (t, x) * u x ∧ F (t, x) ≥ 0`. -/
 theorem recursive_of_dynamicConsistency [inst : ConcatMixSpace α] (r : Relation α) :
-    vNM_axioms r ∧ DynamicConsistency r → ∃ u : α → ℝ, utility_function u r ∧
+    VNMAxioms r ∧ DynamicConsistency r → ∃ u : α → ℝ, UtilityFunction u r ∧
     ∃ F : (UniType inst.T) × α → ℝ, ∀ (x : α) (t : UniType inst.T),
     u (t ⊕ x) = u t.1 + F (t, x) * u x ∧ F (t, x) ≥ 0 := by
   intro h
@@ -276,14 +276,14 @@ section MarkovReward
 /-! ## The Markov reward theorem -/
 
 /-- Markov reward theorem (vNM axioms ∧ γ-indifference ⇔ ∃ reward function u):
-`vNM_axioms r ∧ γIndifference r ↔ ∃ u : α → ℝ, RewardFunction u r`.
+`VNMAxioms r ∧ γIndifference r ↔ ∃ u : α → ℝ, RewardFunction u r`.
 
 A preference relation on a concatenable mixture space satisfies completeness, transitivity,
 independence, continuity and γ-indifference ⇔ there exists a reward function u : α → ℝ that
 represents the preference relation.
 Proof from Bowling et al. (2023) "Settling the Reward Hypothesis". -/
 theorem markov_reward_theorem [inst : ConcatMixSpace α] (r : Relation α) :
-    vNM_axioms r ∧ γIndifference r ↔ ∃ u : α → ℝ, RewardFunction u r := by
+    VNMAxioms r ∧ γIndifference r ↔ ∃ u : α → ℝ, RewardFunction u r := by
   constructor
   · -- ===== Forward direction: vNM ∧ γ-indifference → ∃ reward function =====
     intro h
@@ -305,7 +305,7 @@ theorem markov_reward_theorem [inst : ConcatMixSpace α] (r : Relation α) :
       have hγprop := hγindiff x inst.ε t
       -- Transform it into u
       -- u((t ⊕ x)+[pγ]ε) = u((t ⊕ ε)+[pγ]x)
-      let pγ' : IntervalType := ⟨1/((γ t).1 + 1), indiff_in_Icc (γ t).2⟩
+      let pγ' : IntervalType := ⟨1/((γ t).1 + 1), indiff_mem_Icc (γ t).2⟩
       have hγprop' : ((t ⊕ x) +[pγ'] inst.ε) ∼[r] ((t ⊕ inst.ε) +[pγ'] x) := hγprop
       have hge := (hoc ((t ⊕ x) +[pγ'] inst.ε) ((t ⊕ inst.ε) +[pγ'] x)).mp hγprop'.left
       have hle := (hoc ((t ⊕ inst.ε) +[pγ'] x) ((t ⊕ x) +[pγ'] inst.ε)).mp hγprop'.right
@@ -339,17 +339,17 @@ theorem markov_reward_theorem [inst : ConcatMixSpace α] (r : Relation α) :
           exact hured
         exact hmult
       exact ⟨hufinal, huε0⟩
-    -- So this u is ordinal consistent, p_linear and MarkovRecursive
+    -- So this u is ordinal consistent, p-linear and MarkovRecursive
     exact ⟨u, hoc, hplin, humarkov⟩
   · -- ===== Backward direction: ∃ reward function → vNM ∧ γ-indifference =====
     intro h
     -- ===== The vNM axioms =====
     -- The vNM axioms come from the reward function being a utility function
     -- and the vNM theorem
-    have hvNM : vNM_axioms r := by
+    have hvNM : VNMAxioms r := by
       rcases h with ⟨u, hreward⟩
       rcases hreward with ⟨hoc, hplin, _⟩
-      have huutility : ∃ u, utility_function u r := ⟨u, ⟨hoc, hplin⟩⟩
+      have huutility : ∃ u, UtilityFunction u r := ⟨u, ⟨hoc, hplin⟩⟩
       exact (vNM_theorem r).mpr huutility
     -- ===== γ-indifference =====
     -- γ-indifference comes from the MarkovRecursive property
@@ -359,7 +359,7 @@ theorem markov_reward_theorem [inst : ConcatMixSpace α] (r : Relation α) :
       rcases hmarkov with ⟨γ, hrec⟩
       refine ⟨γ, ?_⟩
       intro x y t
-      let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_in_Icc (γ t).2⟩
+      let pγ : IntervalType := ⟨1/((γ t).1 + 1), indiff_mem_Icc (γ t).2⟩
       -- First, we express as u(t ⊕ x) - (γ t) * u x = u t.1
       have hutx : u (t ⊕ x) - (γ t).1 * u x = u t.1 := by
         linarith [(hrec x t).1]
